@@ -35,21 +35,15 @@
     }
 
     .bg {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
+      position: fixed; inset: 0; z-index: 0;
       background:
         radial-gradient(ellipse 70% 50% at 30% 20%, rgba(59,130,246,0.12) 0%, transparent 60%),
         radial-gradient(ellipse 50% 40% at 80% 70%, rgba(139,92,246,0.08) 0%, transparent 60%),
         var(--dark);
     }
 
-    .bg-circles {
-      position: fixed; inset: 0; z-index: 0; overflow: hidden;
-    }
-    .bg-circles span {
-      position: absolute; border-radius: 50%; border: 1px solid rgba(59,130,246,0.08);
-    }
+    .bg-circles { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
+    .bg-circles span { position: absolute; border-radius: 50%; border: 1px solid rgba(59,130,246,0.08); }
     .bg-circles span:nth-child(1) { width: 400px; height: 400px; top: -100px; right: -100px; }
     .bg-circles span:nth-child(2) { width: 600px; height: 600px; top: -200px; right: -200px; }
     .bg-circles span:nth-child(3) { width: 300px; height: 300px; bottom: -80px; left: -80px; border-color: rgba(139,92,246,0.08); }
@@ -146,6 +140,7 @@
     .btn-admin { background: var(--admin); color: white; }
     .btn-admin:hover { background: #7C3AED; box-shadow: 0 8px 24px rgba(139,92,246,0.3); transform: translateY(-1px); }
     .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
     .register-link { text-align: center; margin-top: 18px; font-size: 13px; color: var(--muted); }
     .register-link a { color: var(--blue-light); text-decoration: none; font-weight: 500; }
@@ -165,13 +160,20 @@
     }
     .success-msg.show { display: block; }
 
+    .info-msg {
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
+      color: var(--blue-light); border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; margin-bottom: 14px; display: none; line-height: 1.5;
+    }
+    .info-msg.show { display: block; }
+
     .screen { display: none; }
     .screen.show { display: block; }
 
     .screen-title { font-size: 17px; font-weight: 700; margin-bottom: 5px; }
     .screen-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.5; }
 
-    /* אדמין פאנל */
+    /* אדמין */
     .admin-badge {
       display: inline-flex; align-items: center; gap: 6px;
       background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3);
@@ -192,12 +194,14 @@
     .teacher-list {
       background: var(--dark3); border-radius: 10px;
       overflow: hidden; border: 1px solid rgba(255,255,255,0.05);
+      max-height: 220px; overflow-y: auto;
     }
 
     .teacher-list-header {
       padding: 10px 14px; font-size: 12px; font-weight: 700;
       color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
       border-bottom: 1px solid rgba(255,255,255,0.05);
+      position: sticky; top: 0; background: var(--dark3);
     }
 
     .teacher-row {
@@ -208,7 +212,7 @@
 
     .teacher-name { font-weight: 600; }
     .teacher-meta { color: var(--muted); font-size: 12px; margin-top: 1px; }
-    .teacher-actions { display: flex; gap: 6px; }
+    .teacher-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
     .btn-sm {
       padding: 4px 10px; border-radius: 6px; border: none;
@@ -239,12 +243,49 @@
       font-size: 13px; cursor: pointer; transition: all 0.2s; margin-top: 14px;
     }
     .btn-logout:hover { border-color: var(--error); color: var(--error); }
+
+    .loading-spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-left: 8px; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* גוגל כניסה */
+    .google-connect {
+      background: var(--dark3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; padding: 16px; margin-bottom: 16px;
+      text-align: center;
+    }
+    .google-connect p { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+    .btn-google {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; background: white; color: #1F2937;
+      border: none; border-radius: 8px; font-family: 'Heebo', sans-serif;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-google:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.3); transform: translateY(-1px); }
+    .btn-google svg { width: 18px; height: 18px; }
+
+    .connected-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3);
+      color: var(--success); border-radius: 20px; padding: 4px 12px;
+      font-size: 12px; font-weight: 600;
+    }
   </style>
 </head>
 <body>
 
 <div class="bg"></div>
 <div class="bg-circles"><span></span><span></span><span></span></div>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <div class="container">
 
@@ -264,7 +305,6 @@
 
   <div class="card">
 
-    <!-- טאבים -->
     <div class="tabs" id="tabsBar">
       <button class="tab active-student" onclick="switchTab('student')">תלמיד</button>
       <button class="tab" onclick="switchTab('teacher')">מורה</button>
@@ -274,6 +314,7 @@
     <!-- כניסה -->
     <div class="screen show" id="loginScreen">
       <div class="error-msg" id="loginError"></div>
+      <div class="info-msg" id="loginInfo"></div>
 
       <div class="form-group">
         <label>שם משתמש</label>
@@ -294,10 +335,10 @@
     <!-- הרשמת מורה -->
     <div class="screen" id="registerScreen">
       <div class="screen-title" style="color:var(--blue-light)">הרשמת מורה חדש</div>
-      <div class="screen-subtitle">מלא את הפרטים. תקבל סיסמה זמנית לאחר האישור.</div>
+      <div class="screen-subtitle">מלא את הפרטים ואחר כך תחבר את תיקיית הגוגל שלך.</div>
 
       <div class="error-msg" id="registerError"></div>
-      <div class="success-msg" id="registerSuccess">ההרשמה התקבלה! שם המשתמש הוא האימייל שלך. סיסמה זמנית: 1234</div>
+      <div class="success-msg" id="registerSuccess"></div>
 
       <div class="form-group">
         <label>שם מלא</label>
@@ -314,6 +355,23 @@
       <div class="form-group">
         <label>קוד רישום מורים</label>
         <input type="password" id="regCode" placeholder="קבל מהמנהל" />
+      </div>
+
+      <!-- חיבור גוגל דרייב -->
+      <div class="google-connect" id="googleConnectBox">
+        <p>כדי לאחסן את הנתונים שלך, יש לחבר תיקייה בגוגל דרייב</p>
+        <button class="btn-google" onclick="connectGoogle()">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          התחבר עם גוגל
+        </button>
+        <div id="googleConnectedStatus" style="display:none; margin-top:10px;">
+          <span class="connected-badge">✓ <span id="connectedEmail"></span></span>
+        </div>
       </div>
 
       <button class="btn btn-teacher" onclick="handleRegister()">הרשמה</button>
@@ -346,68 +404,28 @@
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-num" id="statTeachers">3</div>
+          <div class="stat-num" id="statTeachers">—</div>
           <div class="stat-label">מורים פעילים</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" id="statStudents">47</div>
+          <div class="stat-num" id="statStudents">—</div>
           <div class="stat-label">תלמידים</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" id="statPending">1</div>
+          <div class="stat-num" id="statPending">—</div>
           <div class="stat-label">ממתינים לאישור</div>
         </div>
         <div class="stat-card">
-          <div class="stat-num" id="statTopics">12</div>
+          <div class="stat-num" id="statTopics">—</div>
           <div class="stat-label">נושאים</div>
         </div>
       </div>
 
-      <div class="teacher-list">
+      <div class="teacher-list" id="teacherList">
         <div class="teacher-list-header">רשימת מורים</div>
-
-        <div class="teacher-row">
-          <div>
-            <div class="teacher-name"><span class="status-dot status-active"></span>רחל כהן</div>
-            <div class="teacher-meta">18 תלמידים · 4 נושאים</div>
-          </div>
-          <div class="teacher-actions">
-            <button class="btn-sm btn-block" onclick="blockTeacher(this,'רחל כהן')">חסום</button>
-          </div>
-        </div>
-
-        <div class="teacher-row">
-          <div>
-            <div class="teacher-name"><span class="status-dot status-active"></span>דוד לוי</div>
-            <div class="teacher-meta">22 תלמידים · 5 נושאים</div>
-          </div>
-          <div class="teacher-actions">
-            <button class="btn-sm btn-block" onclick="blockTeacher(this,'דוד לוי')">חסום</button>
-          </div>
-        </div>
-
-        <div class="teacher-row">
-          <div>
-            <div class="teacher-name"><span class="status-dot status-active"></span>מרים אברהם</div>
-            <div class="teacher-meta">7 תלמידים · 3 נושאים</div>
-          </div>
-          <div class="teacher-actions">
-            <button class="btn-sm btn-block" onclick="blockTeacher(this,'מרים אברהם')">חסום</button>
-          </div>
-        </div>
-
-        <div class="teacher-row">
-          <div>
-            <div class="teacher-name">
-              <span class="status-dot status-pending"></span>יוסי גולן
-              <span class="pending-badge">ממתין</span>
-            </div>
-            <div class="teacher-meta">נרשם לפני שעה</div>
-          </div>
-          <div class="teacher-actions">
-            <button class="btn-sm btn-approve" onclick="approveTeacher(this,'יוסי גולן')">אשר</button>
-            <button class="btn-sm btn-block" onclick="blockTeacher(this,'יוסי גולן')">דחה</button>
-          </div>
+        <div style="padding:20px; text-align:center; color:var(--muted); font-size:13px;">
+          טוען נתונים...
+          <div class="loading-spinner"></div>
         </div>
       </div>
 
@@ -415,7 +433,7 @@
 
       <div class="form-group">
         <label>קוד רישום מורים</label>
-        <input type="text" id="adminRegCode" value="מורה2025" />
+        <input type="text" id="adminRegCode" placeholder="מורה2025" />
       </div>
       <button class="btn btn-admin" onclick="saveRegCode()">עדכן קוד</button>
       <button class="btn-logout" onclick="adminLogout()">יציאה</button>
@@ -425,16 +443,37 @@
 </div>
 
 <script>
+  // ====================================================
+  // הגדרות — CLIENT ID של גוגל
+  // ====================================================
+  const GOOGLE_CLIENT_ID = '988232727899-g79aj4r1se8d8sg4sn0ht3gtk1641b2t.apps.googleusercontent.com';
+  const ADMIN_USER = 'admin';
   const ADMIN_PASS = 'admin1234';
   let TEACHER_REG_CODE = 'מורה2025';
+
   let currentTab = 'student';
   let currentUser = null;
+  let googleAccessToken = null;
+  let googleUserEmail = null;
 
-  const users = {
-    students: [{ username: 'student1', password: '1234', firstLogin: true, name: 'דוד לוי' }],
-    teachers: [{ username: 'teacher1', password: '1234', firstLogin: true, name: 'רחל כהן' }]
+  // ====================================================
+  // נתוני דמה (יוחלפו בגוגל שיטס בהמשך)
+  // ====================================================
+  const mockUsers = {
+    students: [{ username: 'student1', password: '1234', firstLogin: true, name: 'ישראל ישראלי' }],
+    teachers: [{ username: 'teacher1', password: '1234', firstLogin: true, name: 'רחל כהן', email: 'rachel@test.com' }]
   };
 
+  const mockTeachers = [
+    { name: 'רחל כהן', students: 18, topics: 4, status: 'active', email: 'rachel@test.com' },
+    { name: 'דוד לוי', students: 22, topics: 5, status: 'active', email: 'david@test.com' },
+    { name: 'מרים אברהם', students: 7, topics: 3, status: 'active', email: 'miriam@test.com' },
+    { name: 'יוסי גולן', students: 0, topics: 0, status: 'pending', email: 'yossi@test.com' },
+  ];
+
+  // ====================================================
+  // ניווט בין טאבים ומסכים
+  // ====================================================
   function switchTab(tab) {
     currentTab = tab;
     const tabs = document.querySelectorAll('.tab');
@@ -443,8 +482,8 @@
     if (tab === 'teacher') tabs[1].className = 'tab active-teacher';
     if (tab === 'admin')   tabs[2].className = 'tab active-admin';
 
-    const loginBtn = document.getElementById('loginBtn');
-    const regLink  = document.getElementById('registerLinkWrap');
+    const loginBtn  = document.getElementById('loginBtn');
+    const regLink   = document.getElementById('registerLinkWrap');
     const changeBtn = document.getElementById('changeBtn');
 
     loginBtn.className  = tab === 'admin' ? 'btn btn-admin' : tab === 'teacher' ? 'btn btn-teacher' : 'btn btn-student';
@@ -452,7 +491,7 @@
     regLink.style.display = tab === 'teacher' ? 'block' : 'none';
 
     showScreen('loginScreen');
-    clearErrors();
+    clearAll();
   }
 
   function showScreen(id) {
@@ -460,15 +499,20 @@
     document.getElementById(id).classList.add('show');
   }
 
-  function clearErrors() {
-    document.querySelectorAll('.error-msg, .success-msg').forEach(el => el.classList.remove('show'));
+  function clearAll() {
+    document.querySelectorAll('.error-msg, .success-msg, .info-msg').forEach(el => el.classList.remove('show'));
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
   }
 
+  // ====================================================
+  // כניסה
+  // ====================================================
   function handleLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     const errorEl  = document.getElementById('loginError');
-    clearErrors();
+    errorEl.classList.remove('show');
 
     if (!username || !password) {
       errorEl.textContent = 'נא למלא את כל השדות';
@@ -476,18 +520,21 @@
       return;
     }
 
+    // אדמין
     if (currentTab === 'admin') {
-      if (username === 'admin' && password === ADMIN_PASS) {
+      if (username === ADMIN_USER && password === ADMIN_PASS) {
         document.getElementById('tabsBar').style.display = 'none';
         showScreen('adminPanel');
+        loadAdminData();
       } else {
-        errorEl.textContent = 'שם משתמש או סיסמת אדמין שגויים';
+        errorEl.textContent = 'שם משתמש או סיסמה שגויים';
         errorEl.classList.add('show');
       }
       return;
     }
 
-    const list = currentTab === 'student' ? users.students : users.teachers;
+    // תלמיד / מורה (כרגע מנתוני דמה — בהמשך מגוגל שיטס)
+    const list = currentTab === 'student' ? mockUsers.students : mockUsers.teachers;
     const user = list.find(u => u.username === username && u.password === password);
 
     if (!user) {
@@ -505,12 +552,15 @@
     }
   }
 
+  // ====================================================
+  // החלפת סיסמה
+  // ====================================================
   function handleChangePassword() {
     const newPass     = document.getElementById('newPassword').value;
     const confirmPass = document.getElementById('confirmPassword').value;
     const errorEl     = document.getElementById('changeError');
     const successEl   = document.getElementById('changeSuccess');
-    clearErrors();
+    errorEl.classList.remove('show');
 
     if (newPass.length < 6) {
       errorEl.textContent = 'הסיסמה חייבת להכיל לפחות 6 תווים';
@@ -527,14 +577,41 @@
     setTimeout(() => goToDashboard(), 1500);
   }
 
+  // ====================================================
+  // הרשמת מורה
+  // ====================================================
+  function connectGoogle() {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets email profile',
+      callback: (response) => {
+        if (response.access_token) {
+          googleAccessToken = response.access_token;
+          // קבלת פרטי המשתמש
+          fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: 'Bearer ' + googleAccessToken }
+          })
+          .then(r => r.json())
+          .then(info => {
+            googleUserEmail = info.email;
+            document.getElementById('regEmail').value = info.email;
+            document.getElementById('googleConnectedStatus').style.display = 'block';
+            document.getElementById('connectedEmail').textContent = info.email;
+          });
+        }
+      }
+    });
+    client.requestAccessToken();
+  }
+
   function handleRegister() {
-    const name  = document.getElementById('regName').value.trim();
-    const email = document.getElementById('regEmail').value.trim();
-    const phone = document.getElementById('regPhone').value.trim();
-    const code  = document.getElementById('regCode').value.trim();
+    const name    = document.getElementById('regName').value.trim();
+    const email   = document.getElementById('regEmail').value.trim();
+    const phone   = document.getElementById('regPhone').value.trim();
+    const code    = document.getElementById('regCode').value.trim();
     const errorEl   = document.getElementById('registerError');
     const successEl = document.getElementById('registerSuccess');
-    clearErrors();
+    errorEl.classList.remove('show');
 
     if (!name || !email || !phone || !code) {
       errorEl.textContent = 'נא למלא את כל השדות';
@@ -547,50 +624,96 @@
       return;
     }
 
+    // בהמשך — יצירת גיליון בגוגל דרייב
+    successEl.textContent = 'ההרשמה התקבלה! שם המשתמש שלך: ' + email + ' | סיסמה זמנית: 1234';
     successEl.classList.add('show');
-    setTimeout(() => showScreen('loginScreen'), 3000);
+    setTimeout(() => showScreen('loginScreen'), 4000);
   }
 
-  function goToDashboard() {
-    alert('ברוך הבא ' + currentUser.name + '! (דשבורד ' + (currentUser.role === 'teacher' ? 'מורה' : 'תלמיד') + ' — בפיתוח)');
+  // ====================================================
+  // פאנל אדמין
+  // ====================================================
+  function loadAdminData() {
+    // כרגע — נתוני דמה. בהמשך יגיעו מגוגל שיטס.
+    setTimeout(() => {
+      const active  = mockTeachers.filter(t => t.status === 'active').length;
+      const pending = mockTeachers.filter(t => t.status === 'pending').length;
+      const students = mockTeachers.reduce((s, t) => s + t.students, 0);
+      const topics   = mockTeachers.reduce((s, t) => s + t.topics, 0);
+
+      document.getElementById('statTeachers').textContent = active;
+      document.getElementById('statStudents').textContent = students;
+      document.getElementById('statPending').textContent  = pending;
+      document.getElementById('statTopics').textContent   = topics;
+
+      renderTeacherList(mockTeachers);
+    }, 800);
   }
 
-  function approveTeacher(btn, name) {
-    const row  = btn.closest('.teacher-row');
-    const dot  = row.querySelector('.status-dot');
-    const badge = row.querySelector('.pending-badge');
-    dot.className = 'status-dot status-active';
-    if (badge) badge.remove();
-    btn.remove();
-    updateStats();
+  function renderTeacherList(teachers) {
+    const list = document.getElementById('teacherList');
+    let html = '<div class="teacher-list-header">רשימת מורים</div>';
+
+    teachers.forEach((t, i) => {
+      const dot     = `<span class="status-dot status-${t.status}"></span>`;
+      const badge   = t.status === 'pending' ? '<span class="pending-badge">ממתין</span>' : '';
+      const actions = t.status === 'pending'
+        ? `<button class="btn-sm btn-approve" onclick="approveTeacher(${i})">אשר</button>
+           <button class="btn-sm btn-block"   onclick="blockTeacher(${i})">דחה</button>`
+        : `<button class="btn-sm btn-block" onclick="blockTeacher(${i})">חסום</button>`;
+
+      html += `
+        <div class="teacher-row" id="teacher-row-${i}">
+          <div>
+            <div class="teacher-name">${dot}${t.name} ${badge}</div>
+            <div class="teacher-meta">${t.students} תלמידים · ${t.topics} נושאים</div>
+          </div>
+          <div class="teacher-actions">${actions}</div>
+        </div>`;
+    });
+
+    list.innerHTML = html;
   }
 
-  function blockTeacher(btn, name) {
-    if (confirm('האם לחסום את ' + name + '?')) {
-      const dot = btn.closest('.teacher-row').querySelector('.status-dot');
-      dot.className = 'status-dot status-blocked';
-      btn.disabled = true;
-      btn.style.opacity = '0.4';
+  function approveTeacher(i) {
+    mockTeachers[i].status = 'active';
+    renderTeacherList(mockTeachers);
+    updateAdminStats();
+  }
+
+  function blockTeacher(i) {
+    if (confirm('האם לחסום את ' + mockTeachers[i].name + '?')) {
+      mockTeachers[i].status = 'blocked';
+      renderTeacherList(mockTeachers);
+      updateAdminStats();
     }
+  }
+
+  function updateAdminStats() {
+    const active  = mockTeachers.filter(t => t.status === 'active').length;
+    const pending = mockTeachers.filter(t => t.status === 'pending').length;
+    document.getElementById('statTeachers').textContent = active;
+    document.getElementById('statPending').textContent  = pending;
   }
 
   function saveRegCode() {
     const newCode = document.getElementById('adminRegCode').value.trim();
     if (!newCode) return;
     TEACHER_REG_CODE = newCode;
-    alert('קוד הרישום עודכן בהצלחה!');
+    alert('קוד הרישום עודכן בהצלחה! הקוד החדש: ' + newCode);
   }
 
   function adminLogout() {
     document.getElementById('tabsBar').style.display = 'flex';
-    document.getElementById('username').value = '';
-    document.getElementById('password').value = '';
     switchTab('student');
   }
 
-  function updateStats() {
-    const pending = document.querySelectorAll('.status-dot.status-pending').length;
-    document.getElementById('statPending').textContent = pending;
+  // ====================================================
+  // דשבורד (בהמשך יהיה דף נפרד)
+  // ====================================================
+  function goToDashboard() {
+    const role = currentUser.role === 'teacher' ? 'מורה' : 'תלמיד';
+    alert('ברוך הבא ' + currentUser.name + '!\nדשבורד ' + role + ' — בפיתוח');
   }
 </script>
 
