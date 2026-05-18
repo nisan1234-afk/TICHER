@@ -175,7 +175,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* אדמין */
     .admin-badge {
       display: inline-flex; align-items: center; gap: 6px;
       background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3);
@@ -395,8 +394,8 @@
   // ====================================================
   // הגדרות
   // ====================================================
-  const SHEET_ID = '10PxA-ynfG-6d5-FCW54stsz6dLK0c9Qxggl103rjg6A';
-  const API_KEY  = ''; // נוסיף בשלב הבא
+  const SHEET_ID   = '10PxA-ynfG-6d5-FCW54stsz6dLK0c9Qxggl103rjg6A';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4C7Se9shRqtdv2hk34pQAw9-6U9ebZ9iypKJK3SRNDY7yTPvyOXa8sqWglDHcpSUg/exec';
   const ADMIN_USER = 'admin';
   const ADMIN_PASS = 'admin1234';
 
@@ -406,7 +405,7 @@
   let allTeachers = [];
 
   // ====================================================
-  // קריאה מגוגל שיטס (Public)
+  // קריאה מגוגל שיטס
   // ====================================================
   async function fetchSheet(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
@@ -426,9 +425,20 @@
   }
 
   // ====================================================
-  // כתיבה לגוגל שיטס דרך Google Apps Script (בהמשך)
+  // כתיבה לגוגל שיטס דרך Apps Script
   // ====================================================
-  // כרגע — כתיבה תוגדר כאשר נחבר Apps Script
+  async function postToScript(data) {
+    try {
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch(e) {
+      console.error('שגיאה בכתיבה לגיליון:', e);
+      return { success: false, error: e.toString() };
+    }
+  }
 
   // ====================================================
   // ניווט
@@ -473,7 +483,6 @@
       return;
     }
 
-    // אדמין
     if (currentTab === 'admin') {
       if (username === ADMIN_USER && password === ADMIN_PASS) {
         document.getElementById('tabsBar').style.display = 'none';
@@ -486,7 +495,6 @@
       return;
     }
 
-    // מורה / תלמיד — קריאה מגוגל שיטס
     const loginBtn = document.getElementById('loginBtn');
     loginBtn.disabled = true;
     loginBtn.innerHTML = '<span class="loading-spinner"></span>מתחבר...';
@@ -499,7 +507,7 @@
 
     const user = users.find(u =>
       (currentTab === 'teacher' ? u.email === username : u.username === username) &&
-      u.password === password
+      String(u.password) === String(password)
     );
 
     if (!user) {
@@ -522,7 +530,7 @@
 
     currentUser = { ...user, role: currentTab };
 
-    if (user.first_login === true || user.first_login === 'TRUE' || user.password === '1234') {
+    if (String(user.password) === '1234') {
       showScreen('changePasswordScreen');
     } else {
       goToDashboard();
@@ -532,11 +540,12 @@
   // ====================================================
   // החלפת סיסמה
   // ====================================================
-  function handleChangePassword() {
+  async function handleChangePassword() {
     const newPass     = document.getElementById('newPassword').value;
     const confirmPass = document.getElementById('confirmPassword').value;
     const errorEl     = document.getElementById('changeError');
     const successEl   = document.getElementById('changeSuccess');
+    const btn         = document.getElementById('changeBtn');
     errorEl.classList.remove('show');
 
     if (newPass.length < 6) {
@@ -550,7 +559,19 @@
       return;
     }
 
-    // בהמשך — עדכון סיסמה בגוגל שיטס דרך Apps Script
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>שומר...';
+
+    await postToScript({
+      action: 'updatePassword',
+      role: currentUser.role,
+      username: currentUser.role === 'teacher' ? currentUser.email : currentUser.username,
+      newPassword: newPass
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'שמירה וכניסה';
+
     successEl.classList.add('show');
     setTimeout(() => goToDashboard(), 1500);
   }
@@ -565,6 +586,7 @@
     const code    = document.getElementById('regCode').value.trim();
     const errorEl   = document.getElementById('registerError');
     const successEl = document.getElementById('registerSuccess');
+    const btn       = document.getElementById('registerBtn');
     errorEl.classList.remove('show');
     successEl.classList.remove('show');
 
@@ -574,7 +596,6 @@
       return;
     }
 
-    // בדיקת קוד רישום מהגיליון
     const settings = await fetchSheet('הגדרות');
     const codeRow  = settings.find(s => s.key === 'teacher_reg_code');
     const validCode = codeRow ? codeRow.value : teacherRegCode;
@@ -585,10 +606,25 @@
       return;
     }
 
-    // בהמשך — כתיבה לגוגל שיטס דרך Apps Script
-    successEl.textContent = 'ההרשמה התקבלה! שם המשתמש: ' + email + ' | סיסמה זמנית: 1234\nהמנהל יאשר את חשבונך בקרוב.';
-    successEl.classList.add('show');
-    setTimeout(() => showScreen('loginScreen'), 4000);
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>שולח...';
+
+    const result = await postToScript({
+      action: 'registerTeacher',
+      name, email, phone
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'הרשמה';
+
+    if (result.success) {
+      successEl.textContent = 'ההרשמה התקבלה! שם המשתמש: ' + email + ' | סיסמה זמנית: 1234\nהמנהל יאשר את חשבונך בקרוב.';
+      successEl.classList.add('show');
+      setTimeout(() => showScreen('loginScreen'), 4000);
+    } else {
+      errorEl.textContent = 'שגיאה בשליחה. נסה שוב.';
+      errorEl.classList.add('show');
+    }
   }
 
   // ====================================================
@@ -605,9 +641,9 @@
       const active  = teachers.filter(t => t.status === 'active').length;
       const pending = teachers.filter(t => t.status === 'pending').length;
 
-      document.getElementById('statTeachers').textContent = active || 0;
-      document.getElementById('statStudents').textContent = students.length || 0;
-      document.getElementById('statPending').textContent  = pending || 0;
+      document.getElementById('statTeachers').textContent = active;
+      document.getElementById('statStudents').textContent = students.length;
+      document.getElementById('statPending').textContent  = pending;
       document.getElementById('statTopics').textContent   = '—';
 
       const codeRow = settings.find(s => s.key === 'teacher_reg_code');
@@ -620,8 +656,6 @@
 
     } catch(e) {
       console.error('שגיאה בטעינת נתוני אדמין:', e);
-      document.getElementById('teacherListContainer').innerHTML =
-        '<div class="teacher-list-header">רשימת מורים</div><div class="empty-state">שגיאה בטעינת נתונים</div>';
     }
   }
 
@@ -659,19 +693,19 @@
     container.innerHTML = html;
   }
 
-  function approveTeacher(i) {
+  async function approveTeacher(i) {
     allTeachers[i].status = 'active';
     renderTeacherList(allTeachers);
     updateAdminStats();
-    // בהמשך — עדכון בגוגל שיטס
+    await postToScript({ action: 'updateTeacherStatus', email: allTeachers[i].email, status: 'active' });
   }
 
-  function blockTeacher(i) {
+  async function blockTeacher(i) {
     if (confirm('האם לחסום את ' + (allTeachers[i].name || allTeachers[i].email) + '?')) {
       allTeachers[i].status = 'blocked';
       renderTeacherList(allTeachers);
       updateAdminStats();
-      // בהמשך — עדכון בגוגל שיטס
+      await postToScript({ action: 'updateTeacherStatus', email: allTeachers[i].email, status: 'blocked' });
     }
   }
 
@@ -686,8 +720,8 @@
     const newCode = document.getElementById('adminRegCode').value.trim();
     if (!newCode) return;
     teacherRegCode = newCode;
-    // בהמשך — עדכון בגוגל שיטס
-    alert('קוד הרישום עודכן בהצלחה! הקוד החדש: ' + newCode);
+    await postToScript({ action: 'updateRegCode', code: newCode });
+    alert('קוד הרישום עודכן בהצלחה!');
   }
 
   function adminLogout() {
