@@ -49,7 +49,6 @@
     .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
     .register-link { text-align: center; margin-top: 18px; font-size: 13px; color: var(--muted); }
     .register-link a { color: var(--blue-light); text-decoration: none; font-weight: 500; }
-    .register-link a:hover { text-decoration: underline; }
     .error-msg { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: var(--error); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; display: none; line-height: 1.5; }
     .error-msg.show { display: block; }
     .success-msg { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: var(--success); border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 14px; display: none; line-height: 1.5; }
@@ -108,6 +107,8 @@
       <button class="tab" onclick="switchTab('teacher')">מורה</button>
       <button class="tab" onclick="switchTab('admin')">אדמין</button>
     </div>
+
+    <!-- כניסה -->
     <div class="screen show" id="loginScreen">
       <div class="error-msg" id="loginError"></div>
       <div class="form-group"><label>שם משתמש</label><input type="text" id="username" placeholder="הכנס שם משתמש" /></div>
@@ -115,18 +116,21 @@
       <button class="btn btn-student" id="loginBtn" onclick="handleLogin()">כניסה</button>
       <div class="register-link" id="registerLinkWrap" style="display:none">מורה חדש? <a href="#" onclick="showScreen('registerScreen')">הרשמה למערכת</a></div>
     </div>
+
+    <!-- הרשמת מורה -->
     <div class="screen" id="registerScreen">
       <div style="font-size:17px;font-weight:700;color:var(--blue-light);margin-bottom:5px;">הרשמת מורה חדש</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">מלא את הפרטים כדי להצטרף למערכת.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">מלא את הפרטים — המנהל יאשר את חשבונך.</div>
       <div class="error-msg" id="registerError"></div>
       <div class="success-msg" id="registerSuccess"></div>
       <div class="form-group"><label>שם מלא</label><input type="text" id="regName" placeholder="שם פרטי ושם משפחה" /></div>
       <div class="form-group"><label>אימייל</label><input type="email" id="regEmail" placeholder="example@gmail.com" dir="ltr" /></div>
       <div class="form-group"><label>טלפון</label><input type="tel" id="regPhone" placeholder="050-0000000" dir="ltr" /></div>
-      <div class="form-group"><label>קוד רישום מורים</label><input type="password" id="regCode" placeholder="קבל מהמנהל" /></div>
       <button class="btn btn-teacher" id="registerBtn" onclick="handleRegister()">הרשמה</button>
       <div class="register-link"><a href="#" onclick="showScreen('loginScreen')">חזרה לכניסה</a></div>
     </div>
+
+    <!-- החלפת סיסמה -->
     <div class="screen" id="changePasswordScreen">
       <div style="font-size:17px;font-weight:700;color:var(--blue-light);margin-bottom:5px;">החלפת סיסמה</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">זוהי כניסתך הראשונה. בחר סיסמה אישית.</div>
@@ -136,6 +140,8 @@
       <div class="form-group"><label>אימות סיסמה</label><input type="password" id="confirmPassword" placeholder="הכנס שוב את הסיסמה" /></div>
       <button class="btn btn-student" id="changeBtn" onclick="handleChangePassword()">שמירה וכניסה</button>
     </div>
+
+    <!-- פאנל אדמין -->
     <div class="screen" id="adminPanel">
       <div class="admin-badge">⬡ פאנל ניהול</div>
       <div class="stats-grid">
@@ -149,12 +155,11 @@
         <div class="empty-state"><span class="loading-spinner" style="border-top-color:var(--admin-light);border-color:rgba(139,92,246,0.3);"></span> טוען...</div>
       </div>
       <div class="divider"></div>
-      <div class="form-group"><label>קוד רישום מורים</label><input type="text" id="adminRegCode" placeholder="טוען..." /></div>
-      <button class="btn btn-admin" onclick="saveRegCode()">עדכן קוד</button>
       <button class="btn-logout" onclick="adminLogout()">יציאה</button>
     </div>
   </div>
 </div>
+
 <script>
   const SHEET_ID   = '10PxA-ynfG-6d5-FCW54stsz6dLK0c9Qxggl103rjg6A';
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVx9E0fA6fEQS7I4cRpZTFtLB0_jOu2BnbP8zEBJ67rVFIAD6GxEBuov0KFy0xccFA/exec';
@@ -162,7 +167,6 @@
   const ADMIN_PASS = 'admin1234';
   let currentTab = 'student';
   let currentUser = null;
-  let teacherRegCode = 'מורה2025';
   let allTeachers = [];
 
   async function fetchSheet(sheetName) {
@@ -176,7 +180,7 @@
         Object.assign({ _row: ri + 2 }, Object.fromEntries(cols.map((c, i) => [c, r.c[i] ? r.c[i].v : ''])))
       );
       return rows;
-    } catch(e) { console.error('שגיאה:', sheetName, e); return []; }
+    } catch(e) { return []; }
   }
 
   async function callScript(params) {
@@ -185,7 +189,7 @@
       const res = await fetch(url);
       const text = await res.text();
       try { return JSON.parse(text); } catch(e) { return { success: true }; }
-    } catch(e) { return { success: false, error: e.toString() }; }
+    } catch(e) { return { success: false }; }
   }
 
   function switchTab(tab) {
@@ -251,21 +255,16 @@
     const name  = document.getElementById('regName').value.trim();
     const email = document.getElementById('regEmail').value.trim();
     const phone = document.getElementById('regPhone').value.trim();
-    const code  = document.getElementById('regCode').value.trim();
     const errorEl = document.getElementById('registerError');
     const successEl = document.getElementById('registerSuccess');
     const btn = document.getElementById('registerBtn');
     errorEl.classList.remove('show'); successEl.classList.remove('show');
-    if (!name || !email || !phone || !code) { errorEl.textContent = 'נא למלא את כל השדות'; errorEl.classList.add('show'); return; }
-    const settings = await fetchSheet('הגדרות');
-    const codeRow = settings.find(s => s.key === 'teacher_reg_code');
-    const validCode = codeRow ? codeRow.value : teacherRegCode;
-    if (code !== validCode) { errorEl.textContent = 'קוד הרישום שגוי.'; errorEl.classList.add('show'); return; }
+    if (!name || !email || !phone) { errorEl.textContent = 'נא למלא את כל השדות'; errorEl.classList.add('show'); return; }
     btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>שולח...';
     const result = await callScript({ action: 'registerTeacher', name, email, phone });
     btn.disabled = false; btn.textContent = 'הרשמה';
     if (result.success) {
-      successEl.textContent = 'ההרשמה התקבלה! שם משתמש: ' + email + ' | סיסמה זמנית: 1234';
+      successEl.textContent = 'ההרשמה התקבלה! המנהל יאשר את חשבונך בקרוב. סיסמה זמנית: 1234';
       successEl.classList.add('show');
       setTimeout(() => showScreen('loginScreen'), 4000);
     } else { errorEl.textContent = 'שגיאה בשליחה. נסה שוב.'; errorEl.classList.add('show'); }
@@ -275,14 +274,11 @@
     try {
       const teachers = await fetchSheet('מורים');
       const students = await fetchSheet('תלמידים');
-      const settings = await fetchSheet('הגדרות');
       allTeachers = teachers;
       document.getElementById('statTeachers').textContent = teachers.filter(t => t.status === 'active').length;
       document.getElementById('statStudents').textContent = students.length;
       document.getElementById('statPending').textContent  = teachers.filter(t => t.status === 'pending').length;
       document.getElementById('statTopics').textContent   = '—';
-      const codeRow = settings.find(s => s.key === 'teacher_reg_code');
-      if (codeRow) { document.getElementById('adminRegCode').value = codeRow.value; teacherRegCode = codeRow.value; }
       renderTeacherList(teachers);
     } catch(e) { console.error('שגיאה:', e); }
   }
@@ -321,14 +317,6 @@
   function updateAdminStats() {
     document.getElementById('statTeachers').textContent = allTeachers.filter(t => t.status === 'active').length;
     document.getElementById('statPending').textContent  = allTeachers.filter(t => t.status === 'pending').length;
-  }
-
-  async function saveRegCode() {
-    const newCode = document.getElementById('adminRegCode').value.trim();
-    if (!newCode) return;
-    teacherRegCode = newCode;
-    await callScript({ action: 'updateRegCode', code: newCode });
-    alert('קוד הרישום עודכן!');
   }
 
   function adminLogout() {
