@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>כיתה פלוס — דשבורד מורה</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #3B82F6; --blue-dark: #2563EB; --blue-light: #93C5FD;
+      --dark: #0A0F1E; --dark2: #111827; --dark3: #1F2937; --dark4: #374151;
+      --text: #F9FAFB; --muted: #9CA3AF; --error: #EF4444;
+      --success: #10B981; --warning: #F59E0B;
+      --admin: #8B5CF6; --admin-light: #A78BFA;
+    }
+    body { font-family: 'Heebo', sans-serif; background: var(--dark); color: var(--text); min-height: 100vh; }
+
+    /* טופבר */
+    .topbar { background: var(--dark2); border-bottom: 1px solid rgba(255,255,255,0.07); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-logo { font-size: 18px; font-weight: 800; background: linear-gradient(135deg, var(--blue-light), var(--admin-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .topbar-user { display: flex; align-items: center; gap: 12px; }
+    .user-name { font-size: 14px; font-weight: 600; }
+    .user-role { font-size: 11px; color: var(--muted); }
+    .btn-logout-top { padding: 6px 14px; background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .btn-logout-top:hover { border-color: var(--error); color: var(--error); }
+
+    /* תוכן ראשי */
+    .main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+    /* כרטיסי סטטיסטיקה */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px 20px; }
+    .stat-num { font-size: 28px; font-weight: 800; color: var(--blue-light); }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    /* לשוניות */
+    .tabs-row { display: flex; gap: 4px; margin-bottom: 20px; background: var(--dark2); border-radius: 12px; padding: 4px; border: 1px solid rgba(255,255,255,0.07); width: fit-content; }
+    .tab-btn { padding: 9px 20px; border: none; border-radius: 9px; background: transparent; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { background: var(--blue); color: white; font-weight: 700; }
+
+    /* כפתורים */
+    .btn { padding: 10px 18px; border: none; border-radius: 10px; font-family: 'Heebo', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-primary:hover { background: var(--blue-dark); transform: translateY(-1px); }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,0.15); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--blue); color: var(--blue-light); }
+    .btn-danger { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--error); }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 7px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* כרטיס */
+    .card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .card-title { font-size: 15px; font-weight: 700; }
+
+    /* טבלה */
+    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 11px 14px; text-align: right; background: var(--dark3); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    td { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* תגים */
+    .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-success { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-warning { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-error { background: rgba(239,68,68,0.15); color: var(--error); border: 1px solid rgba(239,68,68,0.3); }
+    .badge-blue { background: rgba(59,130,246,0.15); color: var(--blue-light); border: 1px solid rgba(59,130,246,0.3); }
+
+    /* אינפוט */
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    input, select { width: 100%; padding: 10px 14px; background: var(--dark3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; direction: rtl; }
+    input:focus, select:focus { border-color: rgba(59,130,246,0.5); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    input::placeholder { color: #4B5563; }
+    select option { background: var(--dark3); }
+
+    /* העלאת קובץ */
+    .upload-zone { border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .upload-zone:hover { border-color: var(--blue); background: rgba(59,130,246,0.05); }
+    .upload-zone.dragover { border-color: var(--blue); background: rgba(59,130,246,0.1); }
+    .upload-icon { font-size: 32px; margin-bottom: 10px; }
+    .upload-text { font-size: 14px; color: var(--muted); }
+    .upload-text strong { color: var(--blue-light); }
+
+    /* נושאים */
+    .topics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .topic-card { background: var(--dark3); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 16px; transition: all 0.2s; cursor: pointer; }
+    .topic-card:hover { border-color: rgba(59,130,246,0.4); transform: translateY(-2px); }
+    .topic-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .topic-meta { font-size: 12px; color: var(--muted); }
+    .topic-actions { display: flex; gap: 6px; margin-top: 12px; }
+
+    /* מודל */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--dark2); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; animation: fadeUp 0.2s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* הודעות */
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; display: none; }
+    .alert.show { display: block; }
+    .alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: var(--error); }
+    .alert-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: var(--success); }
+
+    /* ספינר */
+    .loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-left: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .divider { height: 1px; background: rgba(255,255,255,0.07); margin: 16px 0; }
+    .empty-state { padding: 40px; text-align: center; color: var(--muted); font-size: 14px; }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; }
+
+    .actions-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+
+    .screen { display: none; }
+    .screen.show { display: block; }
+
+    @media (max-width: 768px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .main { padding: 16px; }
+      .topbar { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- טופבר -->
+<div class="topbar">
+  <div class="topbar-logo">כיתה פלוס</div>
+  <div class="topbar-user">
+    <div>
+      <div class="user-name" id="teacherName">טוען...</div>
+      <div class="user-role">מורה</div>
+    </div>
+    <button class="btn-logout-top" onclick="logout()">יציאה</button>
+  </div>
+</div>
+
+<!-- תוכן ראשי -->
+<div class="main">
+
+  <!-- סטטיסטיקות -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num" id="statStudents">—</div>
+      <div class="stat-label">תלמידים</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statTopics">—</div>
+      <div class="stat-label">נושאים</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statActivities">—</div>
+      <div class="stat-label">פעילויות</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statClasses">—</div>
+      <div class="stat-label">כיתות</div>
+    </div>
+  </div>
+
+  <!-- לשוניות -->
+  <div class="tabs-row">
+    <button class="tab-btn active" onclick="switchTab('students')">תלמידים</button>
+    <button class="tab-btn" onclick="switchTab('materials')">חומרים</button>
+    <button class="tab-btn" onclick="switchTab('activities')">פעילויות</button>
+  </div>
+
+  <!-- לשונית תלמידים -->
+  <div class="screen show" id="tab-students">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">רשימת תלמידים</div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="downloadTemplate()">⬇ הורד תבנית Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="showModal('uploadModal')">⬆ העלה Excel</button>
+          <button class="btn btn-success btn-sm" onclick="showModal('addStudentModal')">+ הוסף תלמיד</button>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <input type="text" id="studentSearch" placeholder="חיפוש תלמיד..." style="max-width:240px;" oninput="filterStudents()" />
+        <select id="classFilter" style="max-width:160px;" onchange="filterStudents()">
+          <option value="">כל הכיתות</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table id="studentsTable">
+          <thead>
+            <tr>
+              <th>שם</th>
+              <th>כיתה</th>
+              <th>טלפון</th>
+              <th>מייל</th>
+              <th>כניסה ראשונה</th>
+              <th>סטטוס</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody id="studentsBody">
+            <tr><td colspan="7" class="empty-state">טוען תלמידים...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- לשונית חומרים -->
+  <div class="screen" id="tab-materials">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">נושאים</div>
+        <button class="btn btn-primary btn-sm" onclick="showModal('addTopicModal')">+ נושא חדש</button>
+      </div>
+      <div class="topics-grid" id="topicsGrid">
+        <div class="empty-state"><div class="empty-icon">📚</div>אין נושאים עדיין. צור נושא חדש!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- לשונית פעילויות -->
+  <div class="screen" id="tab-activities">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">פעילויות</div>
+        <button class="btn btn-primary btn-sm" onclick="goToCreate()">+ צור פעילות</button>
+      </div>
+      <div class="empty-state">
+        <div class="empty-icon">🎯</div>
+        אין פעילויות עדיין.<br>לחץ "צור פעילות" כדי להתחיל.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- מודל הוספת תלמיד -->
+<div class="modal-overlay" id="addStudentModal">
+  <div class="modal">
+    <div class="modal-title">הוספת תלמיד</div>
+    <div class="alert alert-error" id="addStudentError"></div>
+    <div class="alert alert-success" id="addStudentSuccess"></div>
+    <div class="form-group"><label>שם פרטי</label><input type="text" id="sFirstName" placeholder="שם פרטי" /></div>
+    <div class="form-group"><label>שם משפחה</label><input type="text" id="sLastName" placeholder="שם משפחה" /></div>
+    <div class="form-group"><label>כיתה</label><input type="text" id="sClass" placeholder="למשל: י1" /></div>
+    <div class="form-group"><label>טלפון</label><input type="tel" id="sPhone" placeholder="050-0000000" dir="ltr" /></div>
+    <div class="form-group"><label>מייל</label><input type="email" id="sEmail" placeholder="example@gmail.com" dir="ltr" /></div>
+    <div class="form-group"><label>שם משתמש</label><input type="text" id="sUsername" placeholder="לדוגמה: yossi.cohen" dir="ltr" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="hideModal('addStudentModal')">ביטול</button>
+      <button class="btn btn-primary" id="addStudentBtn" onclick="addStudent()">הוספה</button>
+    </div>
+  </div>
+</div>
+
+<!-- מודל העלאת Excel -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal">
+    <div class="modal-title">העלאת רשימת תלמידים</div>
+    <div class="alert alert-error" id="uploadError"></div>
+    <div class="alert alert-success" id="uploadSuccess"></div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+      הורד את תבנית ה-Excel, מלא את הפרטים והעלה כאן.
+      עמודות נדרשות: שם פרטי, שם משפחה, כיתה, טלפון, מייל, שם משתמש
+    </p>
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('excelFile').click()">
+      <div class="upload-icon">📊</div>
+      <div class="upload-text">גרור קובץ Excel לכאן או <strong>לחץ לבחירה</strong></div>
+      <div id="uploadFileName" style="margin-top:8px;font-size:12px;color:var(--blue-light);"></div>
+    </div>
+    <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileSelect(event)" />
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="hideModal('uploadModal')">ביטול</button>
+      <button class="btn btn-primary" id="uploadBtn" onclick="uploadStudents()" disabled>העלה</button>
+    </div>
+  </div>
+</div>
+
+<!-- מודל נושא חדש -->
+<div class="modal-overlay" id="addTopicModal">
+  <div class="modal">
+    <div class="modal-title">נושא חדש</div>
+    <div class="alert alert-error" id="addTopicError"></div>
+    <div class="form-group"><label>שם הנושא</label><input type="text" id="topicName" placeholder='למשל: תנ"ך' /></div>
+    <div class="form-group">
+      <label>כיתות (אופציונלי)</label>
+      <input type="text" id="topicClasses" placeholder="למשל: י1, י2, יא1 (מופרד בפסיקים)" />
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">השאר ריק ליצירת חומר כללי בלבד</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="hideModal('addTopicModal')">ביטול</button>
+      <button class="btn btn-primary" id="addTopicBtn" onclick="addTopic()">יצירה</button>
+    </div>
+  </div>
+</div>
+
+<!-- מודל תלמיד -->
+<div class="modal-overlay" id="studentModal">
+  <div class="modal">
+    <div class="modal-title" id="studentModalName"></div>
+    <div class="alert alert-success" id="studentActionSuccess"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-ghost" onclick="resetStudentPassword()">🔑 איפוס סיסמה ל-1234</button>
+      <button class="btn btn-ghost" onclick="sendEmailToStudent()">📧 שלח מייל לתלמיד</button>
+      <div class="divider"></div>
+      <button class="btn btn-danger" onclick="hideModal('studentModal')">סגור</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SHEET_ID   = '10PxA-ynfG-6d5-FCW54stsz6dLK0c9Qxggl103rjg6A';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1BeJjMuBOgpep7-8OXWDRfgPOM0bLDaEo7ViiPGM4H-Dr6U0kXFOfTGUQxx69qIRE/exec';
+
+  let currentTeacher = null;
+  let allStudents = [];
+  let allTopics = [];
+  let selectedStudent = null;
+  let selectedFile = null;
+
+  // ====== אתחול ======
+  window.onload = async function() {
+    const stored = sessionStorage.getItem('kitahUser');
+    if (!stored) { window.location.href = 'index.html'; return; }
+    const user = JSON.parse(stored);
+    if (user.role !== 'teacher') { window.location.href = 'index.html'; return; }
+    currentTeacher = user;
+    document.getElementById('teacherName').textContent = user.name || user.email;
+    await loadData();
+  };
+
+  async function loadData() {
+    await Promise.all([loadStudents(), loadTopics()]);
+  }
+
+  // ====== גיליון ======
+  async function fetchSheet(sheetName) {
+    const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(sheetName);
+    try {
+      const res  = await fetch(url);
+      const text = await res.text();
+      const json = JSON.parse(text.substring(47).slice(0, -2));
+      const cols = json.table.cols.map(c => c.label);
+      return json.table.rows.map((r, ri) =>
+        Object.assign({ _row: ri + 2 }, Object.fromEntries(cols.map((c, i) => [c, r.c[i] ? r.c[i].v : ''])))
+      );
+    } catch(e) { return []; }
+  }
+
+  async function callScript(params) {
+    try {
+      const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+      const res = await fetch(url);
+      const text = await res.text();
+      try { return JSON.parse(text); } catch(e) { return { success: true }; }
+    } catch(e) { return { success: false }; }
+  }
+
+  // ====== תלמידים ======
+  async function loadStudents() {
+    const all = await fetchSheet('תלמידים');
+    allStudents = all.filter(s => String(s.teacher_email).trim() === String(currentTeacher.email).trim());
+    renderStudents(allStudents);
+    updateStats();
+    populateClassFilter();
+  }
+
+  function renderStudents(students) {
+    const tbody = document.getElementById('studentsBody');
+    if (!students.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">אין תלמידים עדיין</td></tr>';
+      return;
+    }
+    tbody.innerHTML = students.map(s => {
+      const firstLogin = s.first_login === 'TRUE' || s.first_login === true;
+      const statusBadge = firstLogin
+        ? '<span class="badge badge-warning">טרם נכנס</span>'
+        : '<span class="badge badge-success">פעיל</span>';
+      return '<tr>' +
+        '<td><strong>' + (s.name || '') + '</strong></td>' +
+        '<td>' + (s.class || '') + '</td>' +
+        '<td>' + (s.phone || '') + '</td>' +
+        '<td>' + (s.email || '') + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td><span class="badge badge-blue">' + (s.username || '') + '</span></td>' +
+        '<td><button class="btn btn-ghost btn-sm" onclick="openStudentModal(' + JSON.stringify(JSON.stringify(s)) + ')">פעולות</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function filterStudents() {
+    const search = document.getElementById('studentSearch').value.toLowerCase();
+    const cls    = document.getElementById('classFilter').value;
+    const filtered = allStudents.filter(s => {
+      const matchSearch = !search || (s.name || '').toLowerCase().includes(search) || (s.username || '').toLowerCase().includes(search);
+      const matchClass  = !cls || s.class === cls;
+      return matchSearch && matchClass;
+    });
+    renderStudents(filtered);
+  }
+
+  function populateClassFilter() {
+    const classes = [...new Set(allStudents.map(s => s.class).filter(Boolean))].sort();
+    const sel = document.getElementById('classFilter');
+    sel.innerHTML = '<option value="">כל הכיתות</option>' + classes.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+  }
+
+  function updateStats() {
+    document.getElementById('statStudents').textContent = allStudents.length;
+    document.getElementById('statTopics').textContent = allTopics.length;
+    document.getElementById('statActivities').textContent = '0';
+    const classes = [...new Set(allStudents.map(s => s.class).filter(Boolean))];
+    document.getElementById('statClasses').textContent = classes.length;
+  }
+
+  async function addStudent() {
+    const firstName = document.getElementById('sFirstName').value.trim();
+    const lastName  = document.getElementById('sLastName').value.trim();
+    const cls       = document.getElementById('sClass').value.trim();
+    const phone     = document.getElementById('sPhone').value.trim();
+    const email     = document.getElementById('sEmail').value.trim();
+    const username  = document.getElementById('sUsername').value.trim();
+    const errorEl   = document.getElementById('addStudentError');
+    const successEl = document.getElementById('addStudentSuccess');
+    const btn       = document.getElementById('addStudentBtn');
+    errorEl.classList.remove('show'); successEl.classList.remove('show');
+
+    if (!firstName || !lastName || !cls || !username) {
+      errorEl.textContent = 'נא למלא שם, כיתה ושם משתמש לפחות';
+      errorEl.classList.add('show'); return;
+    }
+
+    btn.disabled = true; btn.innerHTML = 'מוסיף... <span class="loading-spinner"></span>';
+    const result = await callScript({
+      action: 'addStudent',
+      name: firstName + ' ' + lastName,
+      email, phone, username,
+      class: cls,
+      teacherEmail: currentTeacher.email
+    });
+    btn.disabled = false; btn.textContent = 'הוספה';
+
+    if (result.success) {
+      successEl.textContent = 'התלמיד נוסף בהצלחה!';
+      successEl.classList.add('show');
+      ['sFirstName','sLastName','sClass','sPhone','sEmail','sUsername'].forEach(id => document.getElementById(id).value = '');
+      await loadStudents();
+    } else {
+      errorEl.textContent = 'שגיאה בהוספה. נסה שוב.';
+      errorEl.classList.add('show');
+    }
+  }
+
+  // ====== Excel ======
+  function downloadTemplate() {
+    const csv = 'שם פרטי,שם משפחה,כיתה,טלפון,מייל,שם משתמש\nישראל,ישראלי,י1,050-0000000,israel@test.com,israel.israeli';
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'תבנית_תלמידים.csv'; a.click();
+  }
+
+  function handleFileSelect(event) {
+    selectedFile = event.target.files[0];
+    if (selectedFile) {
+      document.getElementById('uploadFileName').textContent = '📄 ' + selectedFile.name;
+      document.getElementById('uploadBtn').disabled = false;
+    }
+  }
+
+  async function uploadStudents() {
+    if (!selectedFile) return;
+    const errorEl   = document.getElementById('uploadError');
+    const successEl = document.getElementById('uploadSuccess');
+    const btn       = document.getElementById('uploadBtn');
+    errorEl.classList.remove('show'); successEl.classList.remove('show');
+    btn.disabled = true; btn.innerHTML = 'מעלה... <span class="loading-spinner"></span>';
+
+    try {
+      const text = await selectedFile.text();
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      let added = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+        if (vals.length < 3) continue;
+        const student = {};
+        headers.forEach((h, idx) => student[h] = vals[idx] || '');
+
+        await callScript({
+          action: 'addStudent',
+          name: (student['שם פרטי'] || '') + ' ' + (student['שם משפחה'] || ''),
+          email: student['מייל'] || '',
+          phone: student['טלפון'] || '',
+          username: student['שם משתמש'] || '',
+          class: student['כיתה'] || '',
+          teacherEmail: currentTeacher.email
+        });
+        added++;
+      }
+
+      successEl.textContent = 'נוספו ' + added + ' תלמידים בהצלחה!';
+      successEl.classList.add('show');
+      await loadStudents();
+    } catch(e) {
+      errorEl.textContent = 'שגיאה בקריאת הקובץ.';
+      errorEl.classList.add('show');
+    }
+
+    btn.disabled = false; btn.textContent = 'העלה';
+  }
+
+  // ====== נושאים ======
+  async function loadTopics() {
+    const all = await fetchSheet('נושאים');
+    allTopics = all.filter(t => String(t.teacher_email).trim() === String(currentTeacher.email).trim());
+    renderTopics();
+    updateStats();
+  }
+
+  function renderTopics() {
+    const grid = document.getElementById('topicsGrid');
+    if (!allTopics.length) {
+      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div>אין נושאים עדיין. צור נושא חדש!</div>';
+      return;
+    }
+    grid.innerHTML = allTopics.map((t, i) => {
+      const classes = t.classes ? t.classes.split(',').map(c => '<span class="badge badge-blue" style="margin-left:4px;">' + c.trim() + '</span>').join('') : '';
+      return '<div class="topic-card">' +
+        '<div class="topic-name">📖 ' + t.name + '</div>' +
+        '<div class="topic-meta">' + (classes || '<span style="color:var(--muted)">כללי</span>') + '</div>' +
+        '<div class="topic-actions">' +
+        '<button class="btn btn-ghost btn-sm" onclick="openTopic(' + i + ')">פתח</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  async function addTopic() {
+    const name    = document.getElementById('topicName').value.trim();
+    const classes = document.getElementById('topicClasses').value.trim();
+    const errorEl = document.getElementById('addTopicError');
+    const btn     = document.getElementById('addTopicBtn');
+    errorEl.classList.remove('show');
+
+    if (!name) { errorEl.textContent = 'נא להכניס שם נושא'; errorEl.classList.add('show'); return; }
+
+    btn.disabled = true; btn.innerHTML = 'יוצר... <span class="loading-spinner"></span>';
+
+    const result = await callScript({
+      action: 'addTopic',
+      name, classes,
+      teacherEmail: currentTeacher.email,
+      teacherName: currentTeacher.name || currentTeacher.email
+    });
+
+    btn.disabled = false; btn.textContent = 'יצירה';
+
+    if (result.success) {
+      hideModal('addTopicModal');
+      document.getElementById('topicName').value = '';
+      document.getElementById('topicClasses').value = '';
+      await loadTopics();
+    } else {
+      errorEl.textContent = 'שגיאה ביצירה.';
+      errorEl.classList.add('show');
+    }
+  }
+
+  function openTopic(i) {
+    alert('פתיחת נושא: ' + allTopics[i].name + ' — בפיתוח');
+  }
+
+  // ====== מודל תלמיד ======
+  function openStudentModal(studentJson) {
+    selectedStudent = JSON.parse(studentJson);
+    document.getElementById('studentModalName').textContent = selectedStudent.name || selectedStudent.username;
+    document.getElementById('studentActionSuccess').classList.remove('show');
+    showModal('studentModal');
+  }
+
+  async function resetStudentPassword() {
+    if (!selectedStudent) return;
+    const result = await callScript({
+      action: 'updatePassword',
+      role: 'student',
+      username: selectedStudent.username,
+      newPassword: '1234'
+    });
+    if (result.success) {
+      document.getElementById('studentActionSuccess').textContent = 'הסיסמה אופסה ל-1234 בהצלחה!';
+      document.getElementById('studentActionSuccess').classList.add('show');
+    }
+  }
+
+  function sendEmailToStudent() {
+    if (!selectedStudent || !selectedStudent.email) {
+      alert('אין מייל לתלמיד זה'); return;
+    }
+    window.open('mailto:' + selectedStudent.email + '?subject=הודעה מהמורה&body=שלום ' + (selectedStudent.name || '') + ',');
+  }
+
+  // ====== ניווט ======
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('show');
+  }
+
+  function showModal(id) { document.getElementById(id).classList.add('show'); }
+  function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+  function goToCreate() { window.location.href = 'create.html'; }
+
+  function logout() {
+    sessionStorage.removeItem('kitahUser');
+    window.location.href = 'index.html';
+  }
+
+  // סגירת מודל בלחיצה מחוץ
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === this) this.classList.remove('show');
+    });
+  });
+
+  // drag and drop
+  const uploadZone = document.getElementById('uploadZone');
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) { selectedFile = file; document.getElementById('uploadFileName').textContent = '📄 ' + file.name; document.getElementById('uploadBtn').disabled = false; }
+  });
+</script>
+</body>
+</html>
