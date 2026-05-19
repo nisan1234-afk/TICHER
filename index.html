@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>כיתה פלוס — כניסה</title>
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <script src="config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -40,7 +41,7 @@
     input::placeholder { color: #4B5563; }
     .btn { width: 100%; padding: 13px; border: none; border-radius: 10px; font-family: 'Heebo', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: all 0.2s; }
     .btn-student { background: var(--blue); color: white; }
-    .btn-student:hover { background: var(--blue-dark); box-shadow: 0 8px 24px rgba(59,130,246,0.3); transform: translateY(-1px); }
+    .btn-student:hover { background: var(--blue-dark); transform: translateY(-1px); }
     .btn-teacher { background: var(--blue-dark); color: white; }
     .btn-teacher:hover { background: #1D4ED8; transform: translateY(-1px); }
     .btn-admin { background: var(--admin); color: white; }
@@ -108,8 +109,6 @@
       <button class="tab" onclick="switchTab('teacher')">מורה</button>
       <button class="tab" onclick="switchTab('admin')">אדמין</button>
     </div>
-
-    <!-- כניסה -->
     <div class="screen show" id="loginScreen">
       <div class="error-msg" id="loginError"></div>
       <div class="form-group"><label>שם משתמש</label><input type="text" id="username" placeholder="הכנס שם משתמש" /></div>
@@ -117,8 +116,6 @@
       <button class="btn btn-student" id="loginBtn" onclick="handleLogin()">כניסה</button>
       <div class="register-link" id="registerLinkWrap" style="display:none">מורה חדש? <a href="#" onclick="showScreen('registerScreen')">הרשמה למערכת</a></div>
     </div>
-
-    <!-- הרשמת מורה -->
     <div class="screen" id="registerScreen">
       <div style="font-size:17px;font-weight:700;color:var(--blue-light);margin-bottom:5px;">הרשמת מורה חדש</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">מלא את הפרטים — המנהל יאשר את חשבונך.</div>
@@ -130,8 +127,6 @@
       <button class="btn btn-teacher" id="registerBtn" onclick="handleRegister()">הרשמה</button>
       <div class="register-link"><a href="#" onclick="showScreen('loginScreen')">חזרה לכניסה</a></div>
     </div>
-
-    <!-- החלפת סיסמה -->
     <div class="screen" id="changePasswordScreen">
       <div style="font-size:17px;font-weight:700;color:var(--blue-light);margin-bottom:5px;">החלפת סיסמה</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">זוהי כניסתך הראשונה. בחר סיסמה אישית.</div>
@@ -141,8 +136,6 @@
       <div class="form-group"><label>אימות סיסמה</label><input type="password" id="confirmPassword" placeholder="הכנס שוב את הסיסמה" /></div>
       <button class="btn btn-student" id="changeBtn" onclick="handleChangePassword()">שמירה וכניסה</button>
     </div>
-
-    <!-- פאנל אדמין -->
     <div class="screen" id="adminPanel">
       <div class="admin-badge">⬡ פאנל ניהול</div>
       <div class="stats-grid">
@@ -166,18 +159,15 @@
     </div>
   </div>
 </div>
-
 <script>
-  const SHEET_ID   = '10PxA-ynfG-6d5-FCW54stsz6dLK0c9Qxggl103rjg6A';
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxOqE3rYEMHhZaHxV7pwvP51V7zrPbhz8Nr1LEsAPeGb_mIlNWs7xC92qEHGu60XYKp/exec
-';
+  const SHEET_ID   = CONFIG.SHEET_ID;
+  const SCRIPT_URL = CONFIG.SCRIPT_URL;
   const ADMIN_USER = 'admin';
   let ADMIN_PASS = 'admin1234';
   let currentTab = 'student';
   let currentUser = null;
   let allTeachers = [];
 
-  // טעינת סיסמת אדמין מהגיליון
   async function loadAdminPassword() {
     try {
       const settings = await fetchSheet('הגדרות');
@@ -195,10 +185,9 @@
       const text = await res.text();
       const json = JSON.parse(text.substring(47).slice(0, -2));
       const cols = json.table.cols.map(c => c.label);
-      const rows = json.table.rows.map((r, ri) =>
+      return json.table.rows.map((r, ri) =>
         Object.assign({ _row: ri + 2 }, Object.fromEntries(cols.map((c, i) => [c, r.c[i] ? r.c[i].v : ''])))
       );
-      return rows;
     } catch(e) { return []; }
   }
 
@@ -236,7 +225,6 @@
     const errorEl  = document.getElementById('loginError');
     errorEl.classList.remove('show');
     if (!username || !password) { errorEl.textContent = 'נא למלא את כל השדות'; errorEl.classList.add('show'); return; }
-
     if (currentTab === 'admin') {
       await loadAdminPassword();
       if (username === ADMIN_USER && password === ADMIN_PASS) {
@@ -245,29 +233,20 @@
       } else { errorEl.textContent = 'שם משתמש או סיסמה שגויים'; errorEl.classList.add('show'); }
       return;
     }
-
     const loginBtn = document.getElementById('loginBtn');
     loginBtn.disabled = true; loginBtn.innerHTML = '<span class="loading-spinner"></span>מתחבר...';
     const users = await fetchSheet(currentTab === 'teacher' ? 'מורים' : 'תלמידים');
     loginBtn.disabled = false; loginBtn.textContent = 'כניסה';
-
     const user = users.find(u =>
       (currentTab === 'teacher' ? String(u.email).trim() === username : String(u.username).trim() === username) &&
       String(u.password) === String(password)
     );
-
     if (!user) { errorEl.textContent = 'שם משתמש או סיסמה שגויים'; errorEl.classList.add('show'); return; }
     if (user.status === 'blocked') { errorEl.textContent = 'החשבון שלך חסום. פנה למנהל.'; errorEl.classList.add('show'); return; }
     if (user.status === 'pending') { errorEl.textContent = 'החשבון ממתין לאישור המנהל.'; errorEl.classList.add('show'); return; }
-
     currentUser = { ...user, role: currentTab };
     sessionStorage.setItem('kitahUser', JSON.stringify(currentUser));
-
-    if (String(user.password) === '1234') {
-      showScreen('changePasswordScreen');
-    } else {
-      goToDashboard();
-    }
+    if (String(user.password) === '1234') { showScreen('changePasswordScreen'); } else { goToDashboard(); }
   }
 
   async function handleChangePassword() {
