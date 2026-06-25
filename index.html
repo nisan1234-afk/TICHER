@@ -354,13 +354,13 @@
     switchTab('student');
   }
 
-  function goToDashboard() {
-    if (currentUser.role === 'teacher') {
-      window.location.href = 'teacher.html';
-    } else {
-      window.location.href = 'student.html';
-    }
+function goToDashboard() {
+  if (currentUser.role === 'teacher') {
+    window.location.href = 'teacher.html';
+  } else {
+    window.location.href = 'student.html';
   }
+}
 </script>
 </body>
 </html>
