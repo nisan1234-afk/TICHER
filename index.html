@@ -294,8 +294,8 @@
     // טוען את הטאב המתאים
     const sheetName = currentTab === 'teacher' ? 'מורים' : 'תלמידים';
     const users = await fetchSheet(sheetName);
-
-    loginBtn.disabled = false;
+console.log('users:', users.map(u => u.phone + '|' + u.password));
+loginBtn.disabled = false;
     loginBtn.textContent = 'כניסה';
 
     // מחפש לפי טלפון
