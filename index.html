@@ -36,7 +36,7 @@
     .tab.active-admin { background: var(--admin); color: white; font-weight: 700; }
     .form-group { margin-bottom: 16px; }
     label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.5px; }
-    input { width: 100%; padding: 12px 15px; background: var(--dark3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 15px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; direction: rtl; }
+    input { width: 100%; padding: 12px 15px; background: var(--dark3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 15px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; direction: ltr; }
     input:focus { border-color: rgba(59,130,246,0.5); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
     input::placeholder { color: #4B5563; }
     .btn { width: 100%; padding: 13px; border: none; border-radius: 10px; font-family: 'Heebo', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: all 0.2s; }
@@ -84,6 +84,7 @@
     .btn-logout:hover { border-color: var(--error); color: var(--error); }
     .empty-state { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
     .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 16px; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
   </style>
 </head>
 <body>
@@ -109,13 +110,24 @@
       <button class="tab" onclick="switchTab('teacher')">מורה</button>
       <button class="tab" onclick="switchTab('admin')">אדמין</button>
     </div>
+
+    <!-- מסך כניסה -->
     <div class="screen show" id="loginScreen">
       <div class="error-msg" id="loginError"></div>
-      <div class="form-group"><label>שם משתמש</label><input type="text" id="username" placeholder="הכנס שם משתמש" /></div>
-      <div class="form-group"><label>סיסמה</label><input type="password" id="password" placeholder="הכנס סיסמה" onkeydown="if(event.key==='Enter') handleLogin()" /></div>
+      <div class="form-group">
+        <label id="phoneLabel">טלפון</label>
+        <input type="tel" id="phoneInput" placeholder="05X-XXXXXXX" />
+        <div class="hint" id="phoneHint">הזן מספר טלפון ללא מקפים</div>
+      </div>
+      <div class="form-group">
+        <label>סיסמה</label>
+        <input type="password" id="password" placeholder="הכנס סיסמה" onkeydown="if(event.key==='Enter') handleLogin()" />
+      </div>
       <button class="btn btn-student" id="loginBtn" onclick="handleLogin()">כניסה</button>
       <div class="register-link" id="registerLinkWrap" style="display:none">מורה חדש? <a href="#" onclick="showScreen('registerScreen')">הרשמה למערכת</a></div>
     </div>
+
+    <!-- הרשמת מורה -->
     <div class="screen" id="registerScreen">
       <div style="font-size:17px;font-weight:700;color:var(--blue-light);margin-bottom:5px;">הרשמת מורה חדש</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">מלא את הפרטים — המנהל יאשר את חשבונך.</div>
@@ -123,10 +135,12 @@
       <div class="success-msg" id="registerSuccess"></div>
       <div class="form-group"><label>שם מלא</label><input type="text" id="regName" placeholder="שם פרטי ושם משפחה" /></div>
       <div class="form-group"><label>אימייל</label><input type="email" id="regEmail" placeholder="example@gmail.com" dir="ltr" /></div>
-      <div class="form-group"><label>טלפון</label><input type="tel" id="regPhone" placeholder="050-0000000" dir="ltr" /></div>
+      <div class="form-group"><label>טלפון</label><input type="tel" id="regPhone" placeholder="0501234567" dir="ltr" /></div>
       <button class="btn btn-teacher" id="registerBtn" onclick="handleRegister()">הרשמה</button>
       <div class="register-link"><a href="#" onclick="showScreen('loginScreen')">חזרה לכניסה</a></div>
     </div>
+
+    <!-- החלפת סיסמה -->
     <div class="screen" id="changePasswordScreen">
       <div style="font-size:17px;font-weight:700;color:var(--blue-light);margin-bottom:5px;">החלפת סיסמה</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:22px;">זוהי כניסתך הראשונה. בחר סיסמה אישית.</div>
@@ -136,6 +150,8 @@
       <div class="form-group"><label>אימות סיסמה</label><input type="password" id="confirmPassword" placeholder="הכנס שוב את הסיסמה" /></div>
       <button class="btn btn-student" id="changeBtn" onclick="handleChangePassword()">שמירה וכניסה</button>
     </div>
+
+    <!-- פאנל אדמין -->
     <div class="screen" id="adminPanel">
       <div class="admin-badge">⬡ פאנל ניהול</div>
       <div class="stats-grid">
@@ -159,15 +175,17 @@
     </div>
   </div>
 </div>
+
 <script>
   const SHEET_ID   = CONFIG.SHEET_ID;
   const SCRIPT_URL = CONFIG.SCRIPT_URL;
   const ADMIN_USER = 'admin';
-  let ADMIN_PASS = 'admin1234';
-  let currentTab = 'student';
-  let currentUser = null;
-  let allTeachers = [];
+  let ADMIN_PASS   = 'admin1234';
+  let currentTab   = 'student';
+  let currentUser  = null;
+  let allTeachers  = [];
 
+  // טוען סיסמת אדמין מה-Sheet
   async function loadAdminPassword() {
     try {
       const settings = await fetchSheet('הגדרות');
@@ -175,9 +193,9 @@
       if (row) ADMIN_PASS = String(row.value);
     } catch(e) {}
   }
-
   loadAdminPassword();
 
+  // קריאת Sheet
   async function fetchSheet(sheetName) {
     const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(sheetName);
     try {
@@ -191,15 +209,25 @@
     } catch(e) { return []; }
   }
 
+  // קריאת סקריפט
   async function callScript(params) {
     try {
       const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
-      const res = await fetch(url);
+      const res  = await fetch(url);
       const text = await res.text();
       try { return JSON.parse(text); } catch(e) { return { success: true }; }
     } catch(e) { return { success: false }; }
   }
 
+  // ניקוי טלפון — מסיר מקפים, רווחים, +972
+  function cleanPhone(phone) {
+    let p = String(phone).replace(/[-\s]/g, '');
+    if (p.startsWith('+972')) p = '0' + p.slice(4);
+    if (p.startsWith('972')) p = '0' + p.slice(3);
+    return p;
+  }
+
+  // החלפת טאב
   function switchTab(tab) {
     currentTab = tab;
     document.querySelectorAll('.tab').forEach(t => t.className = 'tab');
@@ -207,9 +235,20 @@
     if (tab === 'student') tabs[0].className = 'tab active-student';
     if (tab === 'teacher') tabs[1].className = 'tab active-teacher';
     if (tab === 'admin')   tabs[2].className = 'tab active-admin';
-    document.getElementById('loginBtn').className  = tab === 'admin' ? 'btn btn-admin' : tab === 'teacher' ? 'btn btn-teacher' : 'btn btn-student';
+
+    // כפתור כניסה
+    document.getElementById('loginBtn').className = tab === 'admin' ? 'btn btn-admin' : tab === 'teacher' ? 'btn btn-teacher' : 'btn btn-student';
     document.getElementById('changeBtn').className = tab === 'teacher' ? 'btn btn-teacher' : 'btn btn-student';
+
+    // label שדה
+    document.getElementById('phoneLabel').textContent = tab === 'admin' ? 'שם משתמש' : 'טלפון';
+    document.getElementById('phoneHint').style.display = tab === 'admin' ? 'none' : 'block';
+    document.getElementById('phoneInput').placeholder = tab === 'admin' ? 'admin' : '05X-XXXXXXX';
+    document.getElementById('phoneInput').type = tab === 'admin' ? 'text' : 'tel';
+
+    // קישור הרשמה
     document.getElementById('registerLinkWrap').style.display = tab === 'teacher' ? 'block' : 'none';
+
     showScreen('loginScreen');
     document.querySelectorAll('.error-msg, .success-msg').forEach(el => el.classList.remove('show'));
   }
@@ -219,84 +258,148 @@
     document.getElementById(id).classList.add('show');
   }
 
+  // כניסה
   async function handleLogin() {
-    const username = document.getElementById('username').value.trim();
+    const rawInput = document.getElementById('phoneInput').value.trim();
     const password = document.getElementById('password').value;
     const errorEl  = document.getElementById('loginError');
     errorEl.classList.remove('show');
-    if (!username || !password) { errorEl.textContent = 'נא למלא את כל השדות'; errorEl.classList.add('show'); return; }
-    if (currentTab === 'admin') {
-      await loadAdminPassword();
-      if (username === ADMIN_USER && password === ADMIN_PASS) {
-        document.getElementById('tabsBar').style.display = 'none';
-        showScreen('adminPanel'); loadAdminData();
-      } else { errorEl.textContent = 'שם משתמש או סיסמה שגויים'; errorEl.classList.add('show'); }
+
+    if (!rawInput || !password) {
+      errorEl.textContent = 'נא למלא את כל השדות';
+      errorEl.classList.add('show');
       return;
     }
+
+    // אדמין — לפי שם משתמש
+    if (currentTab === 'admin') {
+      await loadAdminPassword();
+      if (rawInput === ADMIN_USER && password === ADMIN_PASS) {
+        document.getElementById('tabsBar').style.display = 'none';
+        showScreen('adminPanel');
+        loadAdminData();
+      } else {
+        errorEl.textContent = 'שם משתמש או סיסמה שגויים';
+        errorEl.classList.add('show');
+      }
+      return;
+    }
+
+    const phone = cleanPhone(rawInput);
+
     const loginBtn = document.getElementById('loginBtn');
-    loginBtn.disabled = true; loginBtn.innerHTML = '<span class="loading-spinner"></span>מתחבר...';
-    const users = await fetchSheet(currentTab === 'teacher' ? 'מורים' : 'תלמידים');
-    loginBtn.disabled = false; loginBtn.textContent = 'כניסה';
-    const user = users.find(u =>
-      (currentTab === 'teacher' ? String(u.email).trim() === username : String(u.username).trim() === username) &&
-      String(u.password) === String(password)
-    );
-    if (!user) { errorEl.textContent = 'שם משתמש או סיסמה שגויים'; errorEl.classList.add('show'); return; }
-    if (user.status === 'blocked') { errorEl.textContent = 'החשבון שלך חסום. פנה למנהל.'; errorEl.classList.add('show'); return; }
-    if (user.status === 'pending') { errorEl.textContent = 'החשבון ממתין לאישור המנהל.'; errorEl.classList.add('show'); return; }
-    currentUser = { ...user, role: currentTab };
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<span class="loading-spinner"></span>מתחבר...';
+
+    // טוען את הטאב המתאים
+    const sheetName = currentTab === 'teacher' ? 'מורים' : 'תלמידים';
+    const users = await fetchSheet(sheetName);
+
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'כניסה';
+
+    // מחפש לפי טלפון
+    const user = users.find(u => {
+      const userPhone = cleanPhone(u.phone || '');
+      return userPhone === phone && String(u.password) === String(password);
+    });
+
+    if (!user) {
+      errorEl.textContent = 'טלפון או סיסמה שגויים';
+      errorEl.classList.add('show');
+      return;
+    }
+    if (user.status === 'blocked') {
+      errorEl.textContent = 'החשבון שלך חסום. פנה למנהל.';
+      errorEl.classList.add('show');
+      return;
+    }
+    if (user.status === 'pending') {
+      errorEl.textContent = 'החשבון ממתין לאישור המנהל.';
+      errorEl.classList.add('show');
+      return;
+    }
+
+    currentUser = { ...user, role: currentTab, phone };
     sessionStorage.setItem('kitahUser', JSON.stringify(currentUser));
-    if (String(user.password) === '1234') { showScreen('changePasswordScreen'); } else { goToDashboard(); }
+
+    // סיסמה ראשונה
+    if (String(user.password) === '1234') {
+      showScreen('changePasswordScreen');
+    } else {
+      goToDashboard();
+    }
   }
 
+  // החלפת סיסמה
   async function handleChangePassword() {
-    const newPass = document.getElementById('newPassword').value;
+    const newPass     = document.getElementById('newPassword').value;
     const confirmPass = document.getElementById('confirmPassword').value;
-    const errorEl = document.getElementById('changeError');
-    const btn = document.getElementById('changeBtn');
+    const errorEl     = document.getElementById('changeError');
+    const btn         = document.getElementById('changeBtn');
     errorEl.classList.remove('show');
+
     if (newPass.length < 6) { errorEl.textContent = 'לפחות 6 תווים'; errorEl.classList.add('show'); return; }
     if (newPass !== confirmPass) { errorEl.textContent = 'הסיסמאות אינן תואמות'; errorEl.classList.add('show'); return; }
-    btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>שומר...';
-    await callScript({ action: 'updatePassword', role: currentUser.role, username: currentUser.role === 'teacher' ? currentUser.email : currentUser.username, newPassword: newPass });
-    btn.disabled = false; btn.textContent = 'שמירה וכניסה';
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>שומר...';
+
+    await callScript({
+      action: 'updatePassword',
+      role: currentUser.role,
+      phone: currentUser.phone,
+      newPassword: newPass
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'שמירה וכניסה';
     document.getElementById('changeSuccess').classList.add('show');
     setTimeout(() => goToDashboard(), 1500);
   }
 
+  // הרשמת מורה
   async function handleRegister() {
     const name  = document.getElementById('regName').value.trim();
     const email = document.getElementById('regEmail').value.trim();
-    const phone = document.getElementById('regPhone').value.trim();
-    const errorEl = document.getElementById('registerError');
+    const phone = cleanPhone(document.getElementById('regPhone').value.trim());
+    const errorEl   = document.getElementById('registerError');
     const successEl = document.getElementById('registerSuccess');
-    const btn = document.getElementById('registerBtn');
-    errorEl.classList.remove('show'); successEl.classList.remove('show');
-    if (!name || !email || !phone) { errorEl.textContent = 'נא למלא את כל השדות'; errorEl.classList.add('show'); return; }
-    btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>שולח...';
+    const btn       = document.getElementById('registerBtn');
+
+    errorEl.classList.remove('show');
+    successEl.classList.remove('show');
+
+    if (!name || !phone) { errorEl.textContent = 'נא למלא שם וטלפון'; errorEl.classList.add('show'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>שולח...';
+
     const result = await callScript({ action: 'registerTeacher', name, email, phone });
-    btn.disabled = false; btn.textContent = 'הרשמה';
+
+    btn.disabled = false;
+    btn.textContent = 'הרשמה';
+
     if (result.success) {
-      successEl.textContent = 'ההרשמה התקבלה! המנהל יאשר את חשבונך בקרוב. סיסמה זמנית: 1234';
+      successEl.textContent = 'ההרשמה התקבלה! המנהל יאשר את חשבונך. סיסמה זמנית: 1234';
       successEl.classList.add('show');
       setTimeout(() => showScreen('loginScreen'), 4000);
-    } else { errorEl.textContent = 'שגיאה בשליחה. נסה שוב.'; errorEl.classList.add('show'); }
+    } else {
+      errorEl.textContent = 'שגיאה בשליחה. נסה שוב.';
+      errorEl.classList.add('show');
+    }
   }
 
-  async function changeAdminPassword() {
-    const newPass = document.getElementById('adminNewPass').value;
-    const confirmPass = document.getElementById('adminConfirmPass').value;
-    const errorEl = document.getElementById('adminPassError');
-    const successEl = document.getElementById('adminPassSuccess');
-    errorEl.classList.remove('show'); successEl.classList.remove('show');
-    if (newPass.length < 6) { errorEl.textContent = 'לפחות 6 תווים'; errorEl.classList.add('show'); return; }
-    if (newPass !== confirmPass) { errorEl.textContent = 'הסיסמאות אינן תואמות'; errorEl.classList.add('show'); return; }
-    await callScript({ action: 'updateAdminPassword', password: newPass });
-    ADMIN_PASS = newPass;
-    successEl.classList.add('show');
-    document.getElementById('adminNewPass').value = '';
-    document.getElementById('adminConfirmPass').value = '';
+  // ניתוב לדשבורד
+  function goToDashboard() {
+    if (currentUser.role === 'teacher') {
+      window.location.href = 'teacher.html';
+    } else {
+      window.location.href = 'student.html';
+    }
   }
+
+  // ========== אדמין ==========
 
   async function loadAdminData() {
     try {
@@ -308,12 +411,15 @@
       document.getElementById('statPending').textContent  = teachers.filter(t => t.status === 'pending').length;
       document.getElementById('statTopics').textContent   = '—';
       renderTeacherList(teachers);
-    } catch(e) { console.error('שגיאה:', e); }
+    } catch(e) { console.error(e); }
   }
 
   function renderTeacherList(teachers) {
     const container = document.getElementById('teacherListContainer');
-    if (!teachers.length) { container.innerHTML = '<div class="teacher-list-header">רשימת מורים</div><div class="empty-state">אין מורים רשומים עדיין</div>'; return; }
+    if (!teachers.length) {
+      container.innerHTML = '<div class="teacher-list-header">רשימת מורים</div><div class="empty-state">אין מורים רשומים</div>';
+      return;
+    }
     let html = '<div class="teacher-list-header">רשימת מורים</div>';
     teachers.forEach((t, i) => {
       const status  = t.status || 'pending';
@@ -321,23 +427,26 @@
       const badge   = status === 'pending' ? '<span class="pending-badge">ממתין</span>' : '';
       const actions = status === 'pending'
         ? '<button class="btn-sm btn-approve" onclick="approveTeacher(' + i + ')">אשר</button><button class="btn-sm btn-block" onclick="blockTeacher(' + i + ')">דחה</button>'
-        : status === 'blocked' ? '<span style="color:var(--error);font-size:11px;">חסום</span>'
-        : '<button class="btn-sm btn-block" onclick="blockTeacher(' + i + ')">חסום</button>';
-      html += '<div class="teacher-row"><div><div class="teacher-name">' + dot + (t.name || t.email) + ' ' + badge + '</div><div class="teacher-meta">' + (t.students_count || 0) + ' תלמידים · ' + (t.topics || 0) + ' נושאים</div></div><div class="teacher-actions">' + actions + '</div></div>';
+        : status === 'blocked'
+          ? '<span style="color:var(--error);font-size:11px;">חסום</span>'
+          : '<button class="btn-sm btn-block" onclick="blockTeacher(' + i + ')">חסום</button>';
+      html += '<div class="teacher-row"><div><div class="teacher-name">' + dot + (t.name || t.phone) + ' ' + badge + '</div><div class="teacher-meta">' + (t.phone || '') + '</div></div><div class="teacher-actions">' + actions + '</div></div>';
     });
     container.innerHTML = html;
   }
 
   async function approveTeacher(i) {
     allTeachers[i].status = 'active';
-    renderTeacherList(allTeachers); updateAdminStats();
+    renderTeacherList(allTeachers);
+    updateAdminStats();
     await callScript({ action: 'updateTeacherStatus', row: allTeachers[i]._row, status: 'active' });
   }
 
   async function blockTeacher(i) {
-    if (confirm('האם לחסום את ' + (allTeachers[i].name || allTeachers[i].email) + '?')) {
+    if (confirm('האם לחסום את ' + (allTeachers[i].name || allTeachers[i].phone) + '?')) {
       allTeachers[i].status = 'blocked';
-      renderTeacherList(allTeachers); updateAdminStats();
+      renderTeacherList(allTeachers);
+      updateAdminStats();
       await callScript({ action: 'updateTeacherStatus', row: allTeachers[i]._row, status: 'blocked' });
     }
   }
@@ -347,20 +456,28 @@
     document.getElementById('statPending').textContent  = allTeachers.filter(t => t.status === 'pending').length;
   }
 
+  async function changeAdminPassword() {
+    const newPass     = document.getElementById('adminNewPass').value;
+    const confirmPass = document.getElementById('adminConfirmPass').value;
+    const errorEl    = document.getElementById('adminPassError');
+    const successEl  = document.getElementById('adminPassSuccess');
+    errorEl.classList.remove('show');
+    successEl.classList.remove('show');
+    if (newPass.length < 6) { errorEl.textContent = 'לפחות 6 תווים'; errorEl.classList.add('show'); return; }
+    if (newPass !== confirmPass) { errorEl.textContent = 'הסיסמאות אינן תואמות'; errorEl.classList.add('show'); return; }
+    await callScript({ action: 'updateAdminPassword', password: newPass });
+    ADMIN_PASS = newPass;
+    successEl.classList.add('show');
+    document.getElementById('adminNewPass').value = '';
+    document.getElementById('adminConfirmPass').value = '';
+  }
+
   function adminLogout() {
     document.getElementById('tabsBar').style.display = 'flex';
-    document.getElementById('username').value = '';
+    document.getElementById('phoneInput').value = '';
     document.getElementById('password').value = '';
     switchTab('student');
   }
-
-function goToDashboard() {
-  if (currentUser.role === 'teacher') {
-    window.location.href = 'teacher.html';
-  } else {
-    window.location.href = 'student.html';
-  }
-}
 </script>
 </body>
 </html>
