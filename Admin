@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>כיתה פלוס — ניהול מערכת</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #3B82F6; --blue-dark: #2563EB; --blue-light: #93C5FD;
+      --dark: #0A0F1E; --dark2: #111827; --dark3: #1F2937; --dark4: #374151;
+      --text: #F9FAFB; --muted: #9CA3AF; --error: #EF4444;
+      --success: #10B981; --warning: #F59E0B;
+      --purple: #8B5CF6; --purple-light: #A78BFA;
+    }
+    body { font-family: 'Heebo', sans-serif; background: var(--dark); color: var(--text); min-height: 100vh; }
+
+    /* TOPBAR */
+    .topbar { background: var(--dark2); border-bottom: 1px solid rgba(255,255,255,0.07); padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .topbar-logo { font-size: 18px; font-weight: 800; background: linear-gradient(135deg, var(--blue-light), var(--purple-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .topbar-badge { background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.4); color: var(--purple-light); border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .admin-name { font-size: 14px; font-weight: 600; }
+    .btn-back { padding: 6px 14px; background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .btn-back:hover { border-color: var(--blue); color: var(--blue-light); }
+    .btn-logout { padding: 6px 14px; background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .btn-logout:hover { border-color: var(--error); color: var(--error); }
+
+    /* MAIN */
+    .main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+    /* STATS */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .stat-card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 20px; }
+    .stat-num { font-size: 32px; font-weight: 800; }
+    .stat-num.purple { color: var(--purple-light); }
+    .stat-num.blue { color: var(--blue-light); }
+    .stat-num.green { color: var(--success); }
+    .stat-num.warning { color: var(--warning); }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* TABS */
+    .tabs-row { display: flex; gap: 4px; margin-bottom: 24px; background: var(--dark2); border-radius: 12px; padding: 4px; border: 1px solid rgba(255,255,255,0.07); width: fit-content; }
+    .tab-btn { padding: 9px 20px; border: none; border-radius: 9px; background: transparent; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .tab-btn.active { background: var(--purple); color: white; font-weight: 700; }
+
+    .screen { display: none; }
+    .screen.show { display: block; }
+
+    /* CARD */
+    .card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .card-title { font-size: 15px; font-weight: 700; }
+
+    /* TABLE */
+    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 11px 14px; text-align: right; background: var(--dark3); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.07); white-space: nowrap; }
+    td { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* BUTTONS */
+    .btn { padding: 7px 14px; border: none; border-radius: 8px; font-family: 'Heebo', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-approve { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+    .btn-approve:hover { background: rgba(16,185,129,0.25); }
+    .btn-block { background: rgba(239,68,68,0.15); color: var(--error); border: 1px solid rgba(239,68,68,0.3); }
+    .btn-block:hover { background: rgba(239,68,68,0.25); }
+    .btn-drive { background: rgba(59,130,246,0.15); color: var(--blue-light); border: 1px solid rgba(59,130,246,0.3); }
+    .btn-drive:hover { background: rgba(59,130,246,0.25); }
+    .btn-role { background: rgba(139,92,246,0.15); color: var(--purple-light); border: 1px solid rgba(139,92,246,0.3); }
+    .btn-role:hover { background: rgba(139,92,246,0.25); }
+    .btn-unblock { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+
+    /* BADGE */
+    .badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .badge-success { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+    .badge-warning { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+    .badge-error { background: rgba(239,68,68,0.15); color: var(--error); border: 1px solid rgba(239,68,68,0.3); }
+    .badge-purple { background: rgba(139,92,246,0.15); color: var(--purple-light); border: 1px solid rgba(139,92,246,0.3); }
+    .badge-blue { background: rgba(59,130,246,0.15); color: var(--blue-light); border: 1px solid rgba(59,130,246,0.3); }
+
+    /* ACTIONS */
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* MODAL */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--dark2); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 28px; width: 100%; max-width: 460px; animation: fadeUp 0.2s ease; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-title { font-size: 17px; font-weight: 800; margin-bottom: 18px; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    select { width: 100%; padding: 10px 14px; background: var(--dark3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 14px; outline: none; direction: rtl; }
+    select:focus { border-color: rgba(139,92,246,0.5); }
+    .btn-modal-cancel { padding: 9px 18px; background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 9px; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 14px; cursor: pointer; }
+    .btn-modal-confirm { padding: 9px 18px; background: var(--purple); border: none; border-radius: 9px; color: white; font-family: 'Heebo', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+    /* LOG */
+    .log-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .log-row:last-child { border-bottom: none; }
+    .log-icon { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+    .log-text { font-size: 13px; }
+    .log-time { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+    /* LOADING */
+    .loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { padding: 30px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    /* SEARCH */
+    .search-input { padding: 8px 14px; background: var(--dark3); border: 1px solid rgba(255,255,255,0.07); border-radius: 9px; color: var(--text); font-family: 'Heebo', sans-serif; font-size: 13px; outline: none; width: 220px; direction: rtl; }
+    .search-input:focus { border-color: rgba(139,92,246,0.4); }
+
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .main { padding: 16px; }
+      .topbar { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">כיתה פלוס</div>
+    <div class="topbar-badge" id="adminBadge">⬡ אדמין-על</div>
+  </div>
+  <div class="topbar-right">
+    <div class="admin-name" id="adminName">טוען...</div>
+    <button class="btn-back" onclick="goBack()">← חזרה לדשבורד</button>
+    <button class="btn-logout" onclick="logout()">יציאה</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- סטטיסטיקות -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-num purple" id="statTeachers">—</div><div class="stat-label">מורים פעילים</div></div>
+    <div class="stat-card"><div class="stat-num blue" id="statStudents">—</div><div class="stat-label">תלמידים רשומים</div></div>
+    <div class="stat-card"><div class="stat-num warning" id="statPending">—</div><div class="stat-label">ממתינים לאישור</div></div>
+    <div class="stat-card"><div class="stat-num green" id="statSchools">—</div><div class="stat-label">בתי ספר</div></div>
+  </div>
+
+  <!-- טאבים -->
+  <div class="tabs-row">
+    <button class="tab-btn active" onclick="switchTab('teachers', this)">מורים</button>
+    <button class="tab-btn" onclick="switchTab('students', this)">תלמידים</button>
+    <button class="tab-btn" onclick="switchTab('log', this); loadLog()">לוג פעילות</button>
+  </div>
+
+  <!-- מורים -->
+  <div class="screen show" id="tab-teachers">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">רשימת מורים</div>
+        <input type="text" class="search-input" placeholder="חיפוש מורה..." oninput="filterTeachers(this.value)" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>שם</th>
+              <th>מייל</th>
+              <th>טלפון</th>
+              <th>סטטוס</th>
+              <th>תפקידים</th>
+              <th>תיקייה</th>
+              <th>נרשם</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody id="teachersBody">
+            <tr><td colspan="8" class="empty-state"><span class="loading-spinner"></span> טוען...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- תלמידים -->
+  <div class="screen" id="tab-students">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">רשימת תלמידים</div>
+        <input type="text" class="search-input" placeholder="חיפוש תלמיד..." oninput="filterStudents(this.value)" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>שם</th>
+              <th>מייל</th>
+              <th>טלפון</th>
+              <th>כיתה</th>
+              <th>נרשם</th>
+            </tr>
+          </thead>
+          <tbody id="studentsBody">
+            <tr><td colspan="5" class="empty-state"><span class="loading-spinner"></span> טוען...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- לוג פעילות -->
+  <div class="screen" id="tab-log">
+    <div class="card">
+      <div class="card-title">לוג פעילות אחרונה</div>
+      <div id="logContainer">
+        <div class="empty-state"><span class="loading-spinner"></span> טוען...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- מודל ניהול תפקידים -->
+<div class="modal-overlay" id="roleModal">
+  <div class="modal">
+    <div class="modal-title">ניהול תפקידים — <span id="roleModalName"></span></div>
+    <div class="form-group">
+      <label>הוסף תפקיד</label>
+      <select id="roleSelect">
+        <option value="teacher">מורה מקצועי</option>
+        <option value="homeroom">מחנך</option>
+        <option value="school_admin">אדמין בית ספר</option>
+        <option value="admin">אדמין-על</option>
+      </select>
+    </div>
+    <div id="currentRoles" style="margin-top:12px;font-size:13px;color:var(--muted);"></div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="hideModal('roleModal')">סגור</button>
+      <button class="btn-modal-confirm" onclick="addRole()">הוסף תפקיד</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TICHER_URL = 'https://nisan1234-afk.github.io/TICHER/';
+const API_URL    = 'https://script.google.com/macros/s/AKfycbx9FV1fICuoqHgX2zf2i7y6qFYc6R5BYP7CYS3ZPpotc0FigLs23SKM3XtWWZa4twk-/exec';
+
+let currentUser  = null;
+let allTeachers  = [];
+let allStudents  = [];
+let selectedTeacherEmail = null;
+
+// ========== INIT ==========
+
+window.onload = async function() {
+  const stored = sessionStorage.getItem('kitahUser');
+  if (!stored) { window.location.href = TICHER_URL; return; }
+  currentUser = JSON.parse(stored);
+
+  const roles = currentUser.roles || [currentUser.role];
+  if (!roles.some(r => ['admin','school_admin'].includes(r))) {
+    window.location.href = TICHER_URL;
+    return;
+  }
+
+  document.getElementById('adminName').textContent = currentUser.name || currentUser.email;
+
+  const isSuper = roles.includes('admin');
+  document.getElementById('adminBadge').textContent = isSuper ? '⬡ אדמין-על' : '⬡ אדמין בית ספר';
+
+  await loadData();
+};
+
+// ========== API ==========
+
+async function callAPI(action, params = {}) {
+  const res  = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, token: currentUser.token, ...params })
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'שגיאה');
+  return data.data;
+}
+
+// ========== LOAD ==========
+
+async function loadData() {
+  try {
+    const data = await callAPI('getAdminData');
+    allTeachers = data.teachers || [];
+    allStudents = data.students || [];
+    renderStats(data.stats);
+    renderTeachers(allTeachers);
+    renderStudents(allStudents);
+  } catch(e) {
+    document.getElementById('teachersBody').innerHTML =
+      '<tr><td colspan="8" class="empty-state">שגיאה: ' + e.message + '</td></tr>';
+  }
+}
+
+// ========== STATS ==========
+
+function renderStats(stats) {
+  document.getElementById('statTeachers').textContent = stats.active || 0;
+  document.getElementById('statStudents').textContent = stats.students || 0;
+  document.getElementById('statPending').textContent  = stats.pending || 0;
+  document.getElementById('statSchools').textContent  = '1';
+}
+
+// ========== TEACHERS ==========
+
+function renderTeachers(teachers) {
+  const tbody = document.getElementById('teachersBody');
+  if (!teachers.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">אין מורים רשומים</td></tr>';
+    return;
+  }
+  tbody.innerHTML = teachers.map((t, i) => {
+    const status = t.status || 'pending';
+    const statusBadge =
+      status === 'active'  ? '<span class="badge badge-success">פעיל</span>' :
+      status === 'pending' ? '<span class="badge badge-warning">ממתין</span>' :
+                             '<span class="badge badge-error">חסום</span>';
+
+    const driveBtn = t.folder_id
+      ? '<a href="https://drive.google.com/drive/folders/' + t.folder_id + '" target="_blank" class="btn btn-drive">📁 Drive</a>'
+      : '<span style="color:var(--muted);font-size:11px;">—</span>';
+
+    const date = t.created_date ? new Date(t.created_date).toLocaleDateString('he-IL') : '—';
+
+    const actions = '<div class="actions">' +
+      (status === 'pending' ? '<button class="btn btn-approve" onclick="approveTeacher(\'' + t.email + '\')">✓ אשר</button>' : '') +
+      (status === 'active'  ? '<button class="btn btn-block" onclick="blockTeacher(\'' + t.email + '\')">✗ חסום</button>' : '') +
+      (status === 'blocked' ? '<button class="btn btn-unblock" onclick="approveTeacher(\'' + t.email + '\')">↩ שחרר</button>' : '') +
+      '<button class="btn btn-role" onclick="openRoleModal(\'' + t.email + '\', \'' + (t.name || '') + '\')">תפקידים</button>' +
+      driveBtn +
+      '</div>';
+
+    return '<tr>' +
+      '<td><strong>' + (t.name || '—') + '</strong></td>' +
+      '<td style="color:var(--muted)">' + (t.email || '—') + '</td>' +
+      '<td>' + (t.phone || '—') + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td><span class="badge badge-purple">מורה</span></td>' +
+      '<td>' + driveBtn + '</td>' +
+      '<td style="color:var(--muted);font-size:12px;">' + date + '</td>' +
+      '<td>' + actions + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function filterTeachers(q) {
+  const filtered = allTeachers.filter(t =>
+    !q || (t.name || '').includes(q) || (t.email || '').includes(q)
+  );
+  renderTeachers(filtered);
+}
+
+async function approveTeacher(email) {
+  try {
+    await callAPI('updateTeacherStatus', { targetEmail: email, status: 'active' });
+    const t = allTeachers.find(t => t.email === email);
+    if (t) t.status = 'active';
+    renderTeachers(allTeachers);
+    updateStats();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+async function blockTeacher(email) {
+  if (!confirm('לחסום את ' + email + '?')) return;
+  try {
+    await callAPI('updateTeacherStatus', { targetEmail: email, status: 'blocked' });
+    const t = allTeachers.find(t => t.email === email);
+    if (t) t.status = 'blocked';
+    renderTeachers(allTeachers);
+    updateStats();
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+function updateStats() {
+  document.getElementById('statTeachers').textContent = allTeachers.filter(t => t.status === 'active').length;
+  document.getElementById('statPending').textContent  = allTeachers.filter(t => t.status === 'pending').length;
+}
+
+// ========== STUDENTS ==========
+
+function renderStudents(students) {
+  const tbody = document.getElementById('studentsBody');
+  if (!students.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">אין תלמידים רשומים</td></tr>';
+    return;
+  }
+  tbody.innerHTML = students.map(s => {
+    const date = s.created_date ? new Date(s.created_date).toLocaleDateString('he-IL') : '—';
+    return '<tr>' +
+      '<td><strong>' + (s.name || '—') + '</strong></td>' +
+      '<td style="color:var(--muted)">' + (s.email || '—') + '</td>' +
+      '<td>' + (s.phone || '—') + '</td>' +
+      '<td>' + (s.class || '—') + '</td>' +
+      '<td style="color:var(--muted);font-size:12px;">' + date + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function filterStudents(q) {
+  const filtered = allStudents.filter(s =>
+    !q || (s.name || '').includes(q) || (s.email || '').includes(q)
+  );
+  renderStudents(filtered);
+}
+
+// ========== ROLES MODAL ==========
+
+function openRoleModal(email, name) {
+  selectedTeacherEmail = email;
+  document.getElementById('roleModalName').textContent = name || email;
+  document.getElementById('currentRoles').textContent = 'תפקידים נוכחיים: מורה';
+  showModal('roleModal');
+}
+
+async function addRole() {
+  const role = document.getElementById('roleSelect').value;
+  try {
+    await callAPI('addRole', { targetEmail: selectedTeacherEmail, role });
+    hideModal('roleModal');
+    alert('התפקיד נוסף בהצלחה!');
+  } catch(e) { alert('שגיאה: ' + e.message); }
+}
+
+// ========== LOG ==========
+
+function loadLog() {
+  const container = document.getElementById('logContainer');
+  const logs = [
+    { icon: '🔑', text: 'כניסה למערכת', email: currentUser.email, time: 'עכשיו' },
+  ];
+  if (!logs.length) {
+    container.innerHTML = '<div class="empty-state">אין פעילות מתועדת</div>';
+    return;
+  }
+  container.innerHTML = logs.map(l => `
+    <div class="log-row">
+      <div class="log-icon">${l.icon}</div>
+      <div>
+        <div class="log-text">${l.text} — <strong>${l.email}</strong></div>
+        <div class="log-time">${l.time}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ========== UTILS ==========
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('show');
+}
+
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function goBack() { window.location.href = 'teacher.html'; }
+function logout() { sessionStorage.removeItem('kitahUser'); window.location.href = TICHER_URL; }
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
+});
+</script>
+</body>
+</html>
