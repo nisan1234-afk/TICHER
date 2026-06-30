@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>כיתה פלוס — דשבורד תלמיד</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #3B82F6; --blue-dark: #2563EB; --blue-light: #93C5FD;
+      --dark: #0A0F1E; --dark2: #111827; --dark3: #1F2937; --dark4: #374151;
+      --text: #F9FAFB; --muted: #9CA3AF; --error: #EF4444;
+      --success: #10B981; --warning: #F59E0B;
+      --teal: #14B8A6; --purple: #8B5CF6; --purple-light: #A78BFA;
+    }
+    body { font-family: 'Heebo', sans-serif; background: var(--dark); color: var(--text); min-height: 100vh; }
+
+    .topbar { background: var(--dark2); border-bottom: 1px solid rgba(255,255,255,0.07); padding: 0 24px; height: 64px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-logo { font-size: 18px; font-weight: 800; background: linear-gradient(135deg, var(--blue-light), var(--purple-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .user-name { font-size: 14px; font-weight: 700; }
+    .btn-logout { padding: 7px 14px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: var(--muted); font-family: 'Heebo', sans-serif; font-size: 12px; cursor: pointer; }
+    .btn-logout:hover { border-color: var(--error); color: var(--error); }
+
+    .main { max-width: 900px; margin: 0 auto; padding: 28px 24px; }
+
+    /* HERO */
+    .hero { background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(20,184,166,0.08)); border: 1px solid rgba(59,130,246,0.15); border-radius: 20px; padding: 28px; margin-bottom: 28px; }
+    .hero-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+    .hero-greeting h2 { font-size: 22px; font-weight: 800; }
+    .hero-greeting p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .hero-badge { background: rgba(20,184,166,0.15); border: 1px solid rgba(20,184,166,0.3); color: var(--teal); border-radius: 10px; padding: 8px 16px; text-align: center; }
+    .hero-badge-num { font-size: 24px; font-weight: 800; }
+    .hero-badge-label { font-size: 11px; margin-top: 2px; }
+
+    /* MAIN PROGRESS */
+    .main-progress { margin-top: 4px; }
+    .progress-label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .progress-label-text { color: var(--muted); }
+    .progress-label-pct { font-weight: 800; color: var(--teal); font-size: 16px; }
+    .progress-track { height: 12px; background: rgba(255,255,255,0.06); border-radius: 6px; overflow: hidden; position: relative; }
+    .progress-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--teal), var(--blue)); transition: width 0.8s ease; position: relative; }
+    .progress-fill::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: shimmer 2s infinite; }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    .progress-sections { display: flex; justify-content: space-between; margin-top: 8px; }
+    .section-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dark4); transition: background 0.3s; }
+    .section-dot.done { background: var(--teal); }
+    .section-dot.current { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+
+    /* SECTIONS */
+    .sections-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+    .sections-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 28px; }
+    .section-card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 14px; text-align: center; transition: all 0.2s; cursor: default; }
+    .section-card.done { border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.04); }
+    .section-card.current { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.06); cursor: pointer; }
+    .section-card.current:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(59,130,246,0.15); }
+    .section-card.locked { opacity: 0.4; }
+    .section-num { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .section-icon { font-size: 22px; margin-bottom: 6px; }
+    .section-name { font-size: 11px; font-weight: 600; line-height: 1.4; }
+    .section-status { font-size: 10px; margin-top: 6px; }
+    .section-status.done-text { color: var(--success); }
+    .section-status.current-text { color: var(--blue-light); font-weight: 700; }
+    .section-status.locked-text { color: var(--muted); }
+
+    /* CLASS RANK */
+    .rank-card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+    .rank-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--muted); }
+    .rank-bar-wrap { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .rank-label { font-size: 12px; min-width: 60px; }
+    .rank-bar { flex: 1; height: 8px; background: var(--dark3); border-radius: 4px; overflow: hidden; }
+    .rank-fill { height: 100%; border-radius: 4px; }
+    .rank-fill.me { background: linear-gradient(90deg, var(--blue), var(--teal)); }
+    .rank-fill.class { background: var(--dark4); }
+    .rank-pct { font-size: 12px; font-weight: 700; min-width: 36px; text-align: left; }
+    .rank-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    /* CONTRIBUTION */
+    .contrib-card { background: var(--dark2); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+    .contrib-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+    .contrib-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .contrib-label { font-size: 12px; color: var(--muted); min-width: 80px; }
+    .contrib-bar { flex: 1; height: 8px; background: var(--dark3); border-radius: 4px; overflow: hidden; }
+    .contrib-fill { height: 100%; border-radius: 4px; }
+    .contrib-fill.me     { background: var(--blue); }
+    .contrib-fill.partner { background: var(--teal); }
+    .contrib-fill.pair   { background: var(--purple); }
+    .contrib-pct { font-size: 12px; font-weight: 700; min-width: 32px; }
+
+    .loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { padding: 40px; text-align: center; color: var(--muted); font-size: 14px; }
+
+    @media (max-width: 600px) {
+      .sections-grid { grid-template-columns: repeat(2, 1fr); }
+      .main { padding: 16px; }
+      .topbar { padding: 0 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">כיתה פלוס</div>
+  <div class="topbar-right">
+    <div class="user-name" id="userName">טוען...</div>
+    <button class="btn-logout" onclick="logout()">יציאה</button>
+  </div>
+</div>
+
+<div class="main" id="mainContent">
+  <div class="empty-state"><span class="loading-spinner"></span> טוען את הנתונים שלך...</div>
+</div>
+
+<script>
+const TICHER_URL  = 'https://nisan1234-afk.github.io/TICHER/';
+const TOURISM_URL = 'https://nisan1234-afk.github.io/tourismdigi/student.html';
+const API_URL     = 'https://script.google.com/macros/s/AKfycbxZ6mV34krIaH1MkIerwnAiEaQEqrjFSoQrln10Au20X-kbfe3UW8Bac9IP4RYzUqd4/exec';
+
+const SECTION_NAMES = [
+  '', 'פרטי האתר', 'תיאור כללי', 'נוכחות דיגיטלית', 'מושגים',
+  'חוויית משתמש', 'עוצמות', 'הצעות לשיפור', 'סיכום אישי'
+];
+const SECTION_ICONS = ['', '📍', '📄', '📱', '📚', '🖥️', '💪', '💡', '✍️'];
+
+let currentUser = null;
+let pairData    = null;
+
+window.onload = async function() {
+  const stored = sessionStorage.getItem('kitahUser');
+  if (!stored) { window.location.href = TICHER_URL; return; }
+  currentUser = JSON.parse(stored);
+
+  const name = currentUser.name || currentUser.email || '';
+  document.getElementById('userName').textContent = name.split(' ')[0] || name;
+
+  await loadStudentData();
+};
+
+async function callAPI(action, params = {}) {
+  const res  = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, token: currentUser.token, ...params }) });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error);
+  return data.data;
+}
+
+async function loadStudentData() {
+  const main = document.getElementById('mainContent');
+  try {
+    // מביא את נתוני התלמיד דרך getTeacherDashboard — הAPI מחזיר גם נתוני תלמידים
+    const data  = await callAPI('getTeacherDashboard');
+    const pairs = data.pairs || [];
+
+    // מוצא את הזוג של התלמיד הנוכחי
+    const email = currentUser.email;
+    const myPair = pairs.find(p => p.student1_email === email || p.student2_email === email);
+
+    if (!myPair) {
+      main.innerHTML = `
+        <div style="text-align:center;padding:60px 20px;">
+          <div style="font-size:48px;margin-bottom:16px;">📭</div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:8px;">לא שויכת לזוג עדיין</div>
+          <div style="font-size:14px;color:var(--muted);">פנה למורה שלך כדי להיכנס לפרויקט</div>
+        </div>`;
+      return;
+    }
+
+    pairData = myPair;
+    const classAvg = pairs.length ? Math.round(pairs.reduce((s, p) => s + p.percent, 0) / pairs.length) : 0;
+    renderDashboard(myPair, classAvg);
+
+  } catch(e) {
+    main.innerHTML = '<div class="empty-state">שגיאה: ' + e.message + '</div>';
+  }
+}
+
+function renderDashboard(pair, classAvg) {
+  const main     = document.getElementById('mainContent');
+  const name     = currentUser.name || currentUser.email.split('@')[0];
+  const myEmail  = currentUser.email;
+  const isS1     = pair.student1_email === myEmail;
+  const partner  = isS1 ? pair.student2_email : pair.student1_email;
+  const partnerName = partner ? partner.split('@')[0] : 'שותף';
+
+  const contrib  = pair.contribution || { student1: 0, student2: 0, pair: 0 };
+  const myContrib = isS1 ? contrib.student1 : contrib.student2;
+  const partnerContrib = isS1 ? contrib.student2 : contrib.student1;
+
+  const current  = parseInt(pair.current_section) || 1;
+  const percent  = pair.percent || 0;
+
+  // בניית נקודות הסעיפים
+  const dots = Array.from({length: 8}, (_, i) => {
+    const n = i + 1;
+    const cls = n < current ? 'done' : n === current ? 'current' : '';
+    return `<div class="section-dot ${cls}"></div>`;
+  }).join('');
+
+  // בניית כרטיסי הסעיפים
+  const sectionCards = Array.from({length: 8}, (_, i) => {
+    const n   = i + 1;
+    const isDone    = n < current;
+    const isCurrent = n === current;
+    const isLocked  = n > current;
+    const cls = isDone ? 'done' : isCurrent ? 'current' : 'locked';
+    const statusText = isDone ? '✅ הושלם' : isCurrent ? '▶ בעבודה' : '🔒 נעול';
+    const statusClass = isDone ? 'done-text' : isCurrent ? 'current-text' : 'locked-text';
+    const onclick = isCurrent ? `onclick="goToSection(${n})"` : '';
+
+    return `<div class="section-card ${cls}" ${onclick}>
+      <div class="section-num">סעיף ${n}</div>
+      <div class="section-icon">${SECTION_ICONS[n]}</div>
+      <div class="section-name">${SECTION_NAMES[n]}</div>
+      <div class="section-status ${statusClass}">${statusText}</div>
+    </div>`;
+  }).join('');
+
+  main.innerHTML = `
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-top">
+        <div class="hero-greeting">
+          <h2>שלום, ${name.split(' ')[0]}!</h2>
+          <p>🤝 שותף: ${partnerName} · אתר: ${pair.site_name || 'לא נבחר עדיין'}</p>
+        </div>
+        <div class="hero-badge">
+          <div class="hero-badge-num">${percent}%</div>
+          <div class="hero-badge-label">הושלם</div>
+        </div>
+      </div>
+      <div class="main-progress">
+        <div class="progress-label">
+          <span class="progress-label-text">סעיף ${current} מתוך 8 — ${SECTION_NAMES[current]}</span>
+          <span class="progress-label-pct">${percent}%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:${percent}%"></div>
+        </div>
+        <div class="progress-sections">${dots}</div>
+      </div>
+    </div>
+
+    <!-- SECTIONS -->
+    <div class="sections-title">הסעיפים שלי</div>
+    <div class="sections-grid">${sectionCards}</div>
+
+    <!-- CLASS RANK -->
+    <div class="rank-card">
+      <div class="rank-title">📊 מיקום בכיתה (כמותי בלבד)</div>
+      <div class="rank-bar-wrap">
+        <div class="rank-label">הזוג שלי</div>
+        <div class="rank-bar"><div class="rank-fill me" style="width:${percent}%"></div></div>
+        <div class="rank-pct" style="color:var(--blue-light)">${percent}%</div>
+      </div>
+      <div class="rank-bar-wrap">
+        <div class="rank-label">ממוצע כיתה</div>
+        <div class="rank-bar"><div class="rank-fill class" style="width:${classAvg}%;background:var(--dark4);border:1px solid rgba(255,255,255,0.1);"></div></div>
+        <div class="rank-pct" style="color:var(--muted)">${classAvg}%</div>
+      </div>
+      <div class="rank-note">* המיקום מבוסס על כמות הסעיפים שהושלמו — לא על האיכות</div>
+    </div>
+
+    <!-- CONTRIBUTION -->
+    <div class="contrib-card">
+      <div class="contrib-title">🤝 תרומה לפרויקט</div>
+      <div class="contrib-row">
+        <div class="contrib-label">אני (solo)</div>
+        <div class="contrib-bar"><div class="contrib-fill me" style="width:${myContrib}%"></div></div>
+        <div class="contrib-pct" style="color:var(--blue-light)">${myContrib}%</div>
+      </div>
+      <div class="contrib-row">
+        <div class="contrib-label">${partnerName} (solo)</div>
+        <div class="contrib-bar"><div class="contrib-fill partner" style="width:${partnerContrib}%"></div></div>
+        <div class="contrib-pct" style="color:var(--teal)">${partnerContrib}%</div>
+      </div>
+      <div class="contrib-row">
+        <div class="contrib-label">ביחד</div>
+        <div class="contrib-bar"><div class="contrib-fill pair" style="width:${contrib.pair}%"></div></div>
+        <div class="contrib-pct" style="color:var(--purple-light)">${contrib.pair}%</div>
+      </div>
+    </div>
+  `;
+}
+
+function goToSection(n) {
+  sessionStorage.setItem('currentSection', n);
+  window.location.href = TOURISM_URL;
+}
+
+function logout() { sessionStorage.removeItem('kitahUser'); window.location.href = TICHER_URL; }
+</script>
+</body>
+</html>
