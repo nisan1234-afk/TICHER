@@ -65,5 +65,36 @@ function migratePairsToGroups() {
     Logger.log('נוצר טאב files.');
   }
 
+  renamePairIdHeader(ss, 'projects');
+  renamePairIdHeader(ss, 'activity_log');
+
   Logger.log('מיגרציה הסתיימה בהצלחה.');
+}
+
+/**
+ * קריטי: projects ו-activity_log נכתבו במקור עם עמודת pair_id.
+ * ה-API v2 כותב ל-group_id (אותם ערכים בדיוק לקבוצות שמוגרו — group_id = pair_id הישן).
+ * בלי שינוי השם הזה, appendRow ב-API לא ימצא עמודה מתאימה לשמור אליה group_id,
+ * ושורות פרויקט/לוג חדשות ייכתבו בלי מזהה קבוצה כלל — "יתומות" ולא ניתנות לאיתור.
+ * משנה רק את הכותרת (row 1) — לא נוגע בנתונים עצמם.
+ */
+function renamePairIdHeader(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) { Logger.log('טאב ' + sheetName + ' לא נמצא — דילוג.'); return; }
+
+  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  const headers = headerRange.getValues()[0];
+  const idx = headers.indexOf('pair_id');
+
+  if (idx === -1) {
+    if (headers.indexOf('group_id') !== -1) {
+      Logger.log(sheetName + ': כבר עודכן ל-group_id.');
+    } else {
+      Logger.log(sheetName + ': לא נמצאה עמודת pair_id — יש לבדוק ידנית.');
+    }
+    return;
+  }
+
+  sheet.getRange(1, idx + 1).setValue('group_id');
+  Logger.log(sheetName + ': עמודה ' + (idx + 1) + ' שונתה מ-pair_id ל-group_id.');
 }
