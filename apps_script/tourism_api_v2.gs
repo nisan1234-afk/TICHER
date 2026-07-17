@@ -23,6 +23,17 @@ const ALLOWED_ORIGIN = 'https://nisan1234-afk.github.io';
 const DRIVE_FOLDER    = '1SviWtQGsfCB6Yaxs_TwuPCSjFZlUahly';
 const GOOGLE_CLIENT_ID = '988232727899-pajp4mhs43tet1phcu3rc8c8mutsgpme.apps.googleusercontent.com';
 const TOURISM_SUBJECT_NAME = 'תיירות דיגיטלית';
+const GEMINI_MODEL = 'gemini-2.0-flash';
+
+/**
+ * המפתח נשמר ב-Script Properties (לא בקוד, לא ב-HTML הציבורי):
+ * Apps Script עורך → Project Settings → Script Properties → הוסף GEMINI_API_KEY
+ */
+function getGeminiKey() {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) throw new Error('לא הוגדר מפתח Gemini API ב-Script Properties');
+  return key;
+}
 
 // ========== נקודת כניסה ==========
 
@@ -35,7 +46,8 @@ function doPost(e) {
       'getMyProfile', 'getTeacherDashboard', 'getGroupData',
       'saveSection', 'toggleUnit', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
-      'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles'
+      'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
+      'proposeSite', 'chatWithBot'
     ];
 
     if (protectedActions.includes(action)) {
@@ -62,6 +74,9 @@ function doPost(e) {
       removeMember:        () => removeMember(body),
       uploadFile:          () => uploadFile(body),
       getGroupFiles:       () => getGroupFiles(body),
+
+      proposeSite:         () => proposeSite(body),
+      chatWithBot:         () => chatWithBot(body),
     };
 
     if (!handlers[action]) {
@@ -525,6 +540,95 @@ function getOrCreateSubfolder(parentFolder, name) {
   const existing = parentFolder.getFoldersByName(name);
   if (existing.hasNext()) return existing.next();
   return parentFolder.createFolder(name);
+}
+
+// ========== Gemini (בחירת אתר + צ'אטבוט) ==========
+
+function callGemini(systemPrompt, userMessage) {
+  const res = UrlFetchApp.fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + getGeminiKey(),
+    {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      payload: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userMessage }] }]
+      })
+    }
+  );
+  const data = JSON.parse(res.getContentText());
+  const text = data.candidates && data.candidates[0] && data.candidates[0].content
+    ? data.candidates[0].content.parts[0].text
+    : '';
+  if (!text) throw new Error('Gemini לא החזיר תשובה');
+  return text;
+}
+
+/**
+ * בודק התאמה של אתר תיירות מוצע — "בשקט": לא חושף לתלמיד את הקריטריונים,
+ * לא מציע חלופות, וההחלטה הסופית נשארת של התלמיד גם אם הציון נמוך.
+ * קריטריונים (כפי שסוכם עם ניסן): נוכחות דיגיטלית, כמות חומר זמין, התאמה לפרויקט.
+ */
+function proposeSite({ verifiedEmail, group_id, site_name, site_url }) {
+  if (!site_name) throw new Error('נא להזין שם אתר');
+
+  const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const sheet = ss.getSheetByName('groups');
+  const groups = sheetToObjects(sheet);
+  const idx    = groups.findIndex(g => g.group_id == group_id);
+  if (idx === -1) throw new Error('קבוצה לא נמצאה');
+
+  const members = String(groups[idx].members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+    throw new Error('אין הרשאה לבחור אתר לקבוצה זו');
+  }
+
+  const systemPrompt = `אתה בודק התאמה של אתר תיירות פיזי (לא דיגיטלי) לפרויקט לימודי של תלמידי תיכון בנושא "ניתוח נוכחות דיגיטלית".
+בדוק את שלושת הקריטריונים: (1) נוכחות דיגיטלית קיימת לאתר (אתר/סושיאל/ביקורות) שאפשר לנתח, (2) יש מספיק חומר זמין למחקר, (3) האתר מתאים לפרויקט (אתר תיירות פיזי אמיתי, לא עסק סתמי).
+החזר תשובה קצרה בעברית (2-3 משפטים) לתלמיד: אם ההתאמה טובה — עידוד קצר. אם יש חשש — רמז עדין וכללי בלבד (למשל "יכול להיות שיהיה קשה למצוא מספיק מידע") בלי לפרט את הקריטריונים במפורש ובלי להציע אתר חלופי. אל תיתן ציון מספרי בתשובה עצמה.
+בסיום התשובה, בשורה נפרדת, כתוב בדיוק: SCORE: X כאשר X הוא מספר 1-10 (זה לא יוצג לתלמיד).`;
+
+  const reply = callGemini(systemPrompt, 'שם האתר: ' + site_name + (site_url ? ' | קישור: ' + site_url : ''));
+  const scoreMatch = reply.match(/SCORE:\s*(\d+)/);
+  const score = scoreMatch ? parseInt(scoreMatch[1]) : '';
+  const feedback = reply.replace(/SCORE:\s*\d+/, '').trim();
+
+  const headers = getHeaders(sheet);
+  const rowNum  = idx + 2;
+  const nameIdx  = headers.indexOf('site_name') + 1;
+  const urlIdx   = headers.indexOf('site_url') + 1;
+  const scoreIdx = headers.indexOf('site_score') + 1;
+  if (nameIdx > 0)  sheet.getRange(rowNum, nameIdx).setValue(site_name);
+  if (urlIdx > 0)   sheet.getRange(rowNum, urlIdx).setValue(site_url || '');
+  if (scoreIdx > 0) sheet.getRange(rowNum, scoreIdx).setValue(score);
+
+  return { site_name, site_url: site_url || '', feedback };
+}
+
+/**
+ * צ'אטבוט תמיכה — מתערב רק כשתלמיד תקוע, לא המנוע המרכזי של הלמידה.
+ * עקרון פדגוגי: מכוון בשאלות קודם (סוקרטי), מסביר ישירות רק אם התלמיד עדיין תקוע.
+ */
+function chatWithBot({ verifiedEmail, group_id, section_num, message }) {
+  if (!message) throw new Error('לא סופקה הודעה');
+
+  const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const groups = sheetToObjects(ss.getSheetByName('groups'));
+  const group  = groups.find(g => g.group_id == group_id);
+  const siteContext = group && group.site_name ? 'האתר שהקבוצה בוחרת לנתח: ' + group.site_name + '.' : '';
+
+  const SECTION_NAMES = ['', 'פרטי האתר', 'תיאור כללי', 'נוכחות דיגיטלית', 'מושגים', 'חוויית משתמש', 'עוצמות', 'הצעות לשיפור', 'סיכום אישי'];
+  const sectionName = SECTION_NAMES[section_num] || '';
+
+  const systemPrompt = `אתה עוזר לימודי לפרויקט תיירות דיגיטלית של תלמיד תיכון.
+התלמיד עובד כרגע על סעיף ${section_num}: "${sectionName}". ${siteContext}
+תפקידך: קודם כל לכוון בשאלות מנחות (שיטה סוקרטית) — לא לתת תשובה ישירה מיד.
+רק אם התלמיד כותב שהוא עדיין תקוע אחרי שכיוונת אותו — הסבר ישירות וברור.
+ענה בעברית, קצר וידידותי (2-4 משפטים).`;
+
+  const reply = callGemini(systemPrompt, message);
+  return { reply };
 }
 
 // ========== עזרים ==========
