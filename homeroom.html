@@ -184,7 +184,7 @@ const TICHER_URL = 'https://nisan1234-afk.github.io/TICHER/';
 const API_URL    = 'https://script.google.com/macros/s/AKfycbxZ6mV34krIaH1MkIerwnAiEaQEqrjFSoQrln10Au20X-kbfe3UW8Bac9IP4RYzUqd4/exec';
 
 let currentUser = null;
-let pairsData   = [];
+let groupsData  = [];
 
 window.onload = async function() {
   const stored = sessionStorage.getItem('kitahUser');
@@ -211,24 +211,21 @@ async function callAPI(action, params = {}) {
 async function loadData() {
   try {
     const data = await callAPI('getTeacherDashboard');
-    pairsData  = data.pairs || [];
+    groupsData = data.groups || [];
 
     // סטטיסטיקות
     const uniqueStudents = new Set();
-    pairsData.forEach(p => {
-      if (p.student1_email) uniqueStudents.add(p.student1_email);
-      if (p.student2_email) uniqueStudents.add(p.student2_email);
-    });
+    groupsData.forEach(g => (g.members || []).forEach(m => uniqueStudents.add(m)));
 
-    const activeThisWeek = pairsData.filter(p => {
-      if (!p.last_active) return false;
-      return Date.now() - new Date(p.last_active).getTime() < 7 * 24 * 60 * 60 * 1000;
+    const activeThisWeek = groupsData.filter(g => {
+      if (!g.last_active) return false;
+      return Date.now() - new Date(g.last_active).getTime() < 7 * 24 * 60 * 60 * 1000;
     }).length;
 
-    const avg   = pairsData.length ? Math.round(pairsData.reduce((s, p) => s + p.percent, 0) / pairsData.length) : 0;
-    const alert = pairsData.filter(p => {
-      if (!p.last_active) return true;
-      return Date.now() - new Date(p.last_active).getTime() > 7 * 24 * 60 * 60 * 1000;
+    const avg   = groupsData.length ? Math.round(groupsData.reduce((s, g) => s + g.percent, 0) / groupsData.length) : 0;
+    const alert = groupsData.filter(g => {
+      if (!g.last_active) return true;
+      return Date.now() - new Date(g.last_active).getTime() > 7 * 24 * 60 * 60 * 1000;
     }).length;
 
     document.getElementById('statStudents').textContent = uniqueStudents.size;
@@ -245,44 +242,45 @@ async function loadData() {
 
 function renderStudentCards() {
   const grid = document.getElementById('studentGrid');
-  if (!pairsData.length) {
-    grid.innerHTML = '<div class="empty-state">אין זוגות רשומים בכיתה</div>';
+  if (!groupsData.length) {
+    grid.innerHTML = '<div class="empty-state">אין קבוצות רשומות בכיתה</div>';
     return;
   }
 
-  grid.innerHTML = pairsData.map(p => {
-    const diff     = p.last_active ? Date.now() - new Date(p.last_active).getTime() : Infinity;
+  grid.innerHTML = groupsData.map(g => {
+    const diff     = g.last_active ? Date.now() - new Date(g.last_active).getTime() : Infinity;
     const days     = Math.floor(diff / 86400000);
     const isAlert  = days > 7;
     const isGood   = days < 2;
     const cardClass = isAlert ? 'alert' : isGood ? 'good' : '';
 
-    const timeLabel = !p.last_active ? 'לא פעיל' :
+    const timeLabel = !g.last_active ? 'לא פעיל' :
       days === 0 ? 'פעיל היום' :
       days === 1 ? 'אתמול' :
       'לפני ' + days + ' ימים';
     const timeClass = isGood ? 'recent' : isAlert ? 'old' : 'mid';
 
-    const s1 = p.student1_email ? p.student1_email.split('@')[0] : '—';
-    const s2 = p.student2_email ? p.student2_email.split('@')[0] : '';
+    const members    = g.members || [];
+    const namesLabel = members.length ? members.map(m => m.split('@')[0]).join(' + ') : (g.group_name || '—');
+    const avatarLetter = (g.group_name || members[0] || '?')[0].toUpperCase();
 
     return `
       <div class="student-card ${cardClass}">
         <div class="student-header">
-          <div class="student-avatar">${s1[0].toUpperCase()}</div>
+          <div class="student-avatar">${avatarLetter}</div>
           <div>
-            <div class="student-name">${s1}${s2 ? ' + ' + s2 : ''}</div>
-            <div class="student-email">${p.site_name || 'אתר לא נבחר עדיין'}</div>
+            <div class="student-name">${g.group_name || namesLabel}</div>
+            <div class="student-email">${g.site_name || 'אתר לא נבחר עדיין'}</div>
           </div>
         </div>
 
         <div class="subject-progress">
           <div class="subject-label">
             <span class="subject-name-label">🗺️ תיירות דיגיטלית</span>
-            <span class="subject-pct" style="color:var(--teal)">${p.percent}%</span>
+            <span class="subject-pct" style="color:var(--teal)">${g.percent}%</span>
           </div>
           <div class="progress-bar">
-            <div class="progress-fill fill-teal" style="width:${p.percent}%"></div>
+            <div class="progress-fill fill-teal" style="width:${g.percent}%"></div>
           </div>
         </div>
 
@@ -298,7 +296,7 @@ function renderStudentCards() {
 
         <div class="student-footer">
           <span class="last-active-label ${timeClass}">${isAlert ? '⚠️ ' : ''}${timeLabel}</span>
-          <span style="font-size:11px;color:var(--muted)">סעיף ${p.current_section || '—'} / 8</span>
+          <span style="font-size:11px;color:var(--muted)">סעיף ${g.current_section || '—'} / 8</span>
         </div>
       </div>
     `;
@@ -307,34 +305,34 @@ function renderStudentCards() {
 
 function renderComparisonTable() {
   const tbody = document.getElementById('comparisonBody');
-  if (!pairsData.length) {
+  if (!groupsData.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">אין נתונים</td></tr>';
     return;
   }
 
-  tbody.innerHTML = pairsData.map(p => {
-    const diff  = p.last_active ? Date.now() - new Date(p.last_active).getTime() : Infinity;
+  tbody.innerHTML = groupsData.map(g => {
+    const diff  = g.last_active ? Date.now() - new Date(g.last_active).getTime() : Infinity;
     const days  = Math.floor(diff / 86400000);
     const badge = days > 7 ? '<span class="badge badge-error">⚠️ ' + days + ' ימים</span>'
       : days > 2 ? '<span class="badge badge-warning">' + days + ' ימים</span>'
       : '<span class="badge badge-success">פעיל</span>';
 
-    const s1 = p.student1_email ? p.student1_email.split('@')[0] : '—';
-    const s2 = p.student2_email ? p.student2_email.split('@')[0] : '';
+    const members    = g.members || [];
+    const namesLabel = members.map(m => m.split('@')[0]).join(', ') || '—';
 
     const tourismBar = `<div style="display:flex;align-items:center;gap:8px;min-width:120px;">
       <div style="flex:1;height:5px;background:var(--dark4);border-radius:3px;overflow:hidden;">
-        <div style="height:100%;width:${p.percent}%;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:3px;"></div>
+        <div style="height:100%;width:${g.percent}%;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:3px;"></div>
       </div>
-      <span style="font-size:11px;font-weight:700;color:var(--teal);min-width:28px;">${p.percent}%</span>
+      <span style="font-size:11px;font-weight:700;color:var(--teal);min-width:28px;">${g.percent}%</span>
     </div>`;
 
     return `<tr>
-      <td><strong>${s1}</strong>${s2 ? '<br><span style="font-size:11px;color:var(--muted)">' + s2 + '</span>' : ''}</td>
+      <td><strong>${g.group_name || namesLabel}</strong><br><span style="font-size:11px;color:var(--muted)">${namesLabel}</span></td>
       <td>${tourismBar}</td>
       <td><span style="color:var(--muted);font-size:12px;">—</span></td>
       <td><span style="color:var(--muted);font-size:12px;">—</span></td>
-      <td><strong style="color:var(--blue-light)">${p.percent}%</strong></td>
+      <td><strong style="color:var(--blue-light)">${g.percent}%</strong></td>
       <td>${badge}</td>
     </tr>`;
   }).join('');

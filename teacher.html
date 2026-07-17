@@ -246,22 +246,22 @@ async function callAPI(action, params = {}) {
 async function loadDashboard() {
   try {
     dashboardData = await callAPI('getTeacherDashboard', { token: currentUser.token });
-    const pairs = dashboardData.pairs || [];
+    const groups = dashboardData.groups || [];
 
-    const avg  = pairs.length ? Math.round(pairs.reduce((s, p) => s + p.percent, 0) / pairs.length) : 0;
-    const stuck = pairs.filter(p => {
-      if (!p.last_active) return true;
-      return Date.now() - new Date(p.last_active).getTime() > 7 * 24 * 60 * 60 * 1000;
+    const avg  = groups.length ? Math.round(groups.reduce((s, g) => s + g.percent, 0) / groups.length) : 0;
+    const stuck = groups.filter(g => {
+      if (!g.last_active) return true;
+      return Date.now() - new Date(g.last_active).getTime() > 7 * 24 * 60 * 60 * 1000;
     }).length;
 
     document.getElementById('statSubjects').textContent = '1';
-    document.getElementById('statPairs').textContent    = pairs.length;
-    document.getElementById('statPairsSub').textContent = pairs.length + ' זוגות רשומים';
+    document.getElementById('statPairs').textContent    = groups.length;
+    document.getElementById('statPairsSub').textContent = groups.length + ' קבוצות רשומות';
     document.getElementById('statAvg').textContent      = avg + '%';
     document.getElementById('statStuck').textContent    = stuck;
 
-    renderSubjects(pairs);
-    renderActivity(pairs);
+    renderSubjects(groups);
+    renderActivity(groups);
   } catch(e) {
     document.getElementById('subjectsGrid').innerHTML = '<div class="empty-state">שגיאה: ' + e.message + '</div>';
   }
@@ -275,17 +275,17 @@ function renderRoles(roles) {
   document.getElementById('userRoles').textContent = roles.map(r => labels[r] || r).join(' · ');
 }
 
-function renderSubjects(pairs) {
-  const avg = pairs.length ? Math.round(pairs.reduce((s, p) => s + p.percent, 0) / pairs.length) : 0;
+function renderSubjects(groups) {
+  const avg = groups.length ? Math.round(groups.reduce((s, g) => s + g.percent, 0) / groups.length) : 0;
   const grid = document.getElementById('subjectsGrid');
 
   const subjects = [
     {
       id: 'tourism', icon: '🗺️', name: 'תיירות דיגיטלית',
-      desc: 'ניתוח נוכחות דיגיטלית של אתרי תיירות — פרויקט שנתי בזוגות',
+      desc: 'ניתוח נוכחות דיגיטלית של אתרי תיירות — פרויקט שנתי בקבוצות',
       url: TOURISM_URL, active: true, cssClass: 'tourism',
       badge: 'פעיל', badgeClass: 'badge-teal',
-      progress: avg, progressLabel: avg + '% התקדמות ממוצעת · ' + pairs.length + ' זוגות'
+      progress: avg, progressLabel: avg + '% התקדמות ממוצעת · ' + groups.length + ' קבוצות'
     },
     {
       id: 'future1', icon: '📐', name: 'מקצוע נוסף',
@@ -313,9 +313,9 @@ function renderSubjects(pairs) {
   `).join('');
 }
 
-function renderActivity(pairs) {
+function renderActivity(groups) {
   const feed = document.getElementById('activityFeed');
-  const active = pairs.filter(p => p.last_active).sort((a, b) =>
+  const active = groups.filter(g => g.last_active).sort((a, b) =>
     new Date(b.last_active) - new Date(a.last_active)
   ).slice(0, 10);
 
@@ -324,16 +324,16 @@ function renderActivity(pairs) {
     return;
   }
 
-  feed.innerHTML = active.map(p => {
-    const timeAgo = formatTimeAgo(p.last_active);
-    const icon = p.percent === 100 ? '✅' : p.percent > 50 ? '📝' : '🔄';
-    const dotClass = p.percent === 100 ? 'dot-green' : p.percent > 50 ? 'dot-teal' : 'dot-blue';
+  feed.innerHTML = active.map(g => {
+    const timeAgo = formatTimeAgo(g.last_active);
+    const icon = g.percent === 100 ? '✅' : g.percent > 50 ? '📝' : '🔄';
+    const dotClass = g.percent === 100 ? 'dot-green' : g.percent > 50 ? 'dot-teal' : 'dot-blue';
     return `
       <div class="activity-item">
         <div class="activity-dot ${dotClass}">${icon}</div>
         <div>
           <div class="activity-text">
-            <strong>${p.site_name || 'אתר לא נבחר'}</strong> — סעיף ${p.current_section || '—'} · ${p.percent}% הושלמו
+            <strong>${g.site_name || 'אתר לא נבחר'}</strong> — סעיף ${g.current_section || '—'} · ${g.percent}% הושלמו
           </div>
           <div class="activity-time">${timeAgo}</div>
         </div>

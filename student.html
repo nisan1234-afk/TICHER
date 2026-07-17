@@ -125,7 +125,7 @@ const SECTION_NAMES = [
 const SECTION_ICONS = ['', '📍', '📄', '📱', '📚', '🖥️', '💪', '💡', '✍️'];
 
 let currentUser = null;
-let pairData    = null;
+let groupData   = null;
 
 window.onload = async function() {
   const stored = sessionStorage.getItem('kitahUser');
@@ -149,46 +149,44 @@ async function loadStudentData() {
   const main = document.getElementById('mainContent');
   try {
     // מביא את נתוני התלמיד דרך getTeacherDashboard — הAPI מחזיר גם נתוני תלמידים
-    const data  = await callAPI('getTeacherDashboard');
-    const pairs = data.pairs || [];
+    const data   = await callAPI('getTeacherDashboard');
+    const groups = data.groups || [];
 
-    // מוצא את הזוג של התלמיד הנוכחי
+    // מוצא את הקבוצה של התלמיד הנוכחי
     const email = currentUser.email;
-    const myPair = pairs.find(p => p.student1_email === email || p.student2_email === email);
+    const myGroup = groups.find(g => (g.members || []).some(m => m.toLowerCase() === email.toLowerCase()));
 
-    if (!myPair) {
+    if (!myGroup) {
       main.innerHTML = `
         <div style="text-align:center;padding:60px 20px;">
           <div style="font-size:48px;margin-bottom:16px;">📭</div>
-          <div style="font-size:18px;font-weight:700;margin-bottom:8px;">לא שויכת לזוג עדיין</div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:8px;">לא שויכת לקבוצה עדיין</div>
           <div style="font-size:14px;color:var(--muted);">פנה למורה שלך כדי להיכנס לפרויקט</div>
         </div>`;
       return;
     }
 
-    pairData = myPair;
-    const classAvg = pairs.length ? Math.round(pairs.reduce((s, p) => s + p.percent, 0) / pairs.length) : 0;
-    renderDashboard(myPair, classAvg);
+    groupData = myGroup;
+    const classAvg = groups.length ? Math.round(groups.reduce((s, g) => s + g.percent, 0) / groups.length) : 0;
+    renderDashboard(myGroup, classAvg);
 
   } catch(e) {
     main.innerHTML = '<div class="empty-state">שגיאה: ' + e.message + '</div>';
   }
 }
 
-function renderDashboard(pair, classAvg) {
+function renderDashboard(group, classAvg) {
   const main     = document.getElementById('mainContent');
   const name     = currentUser.name || currentUser.email.split('@')[0];
   const myEmail  = currentUser.email;
-  const isS1     = pair.student1_email === myEmail;
-  const partner  = isS1 ? pair.student2_email : pair.student1_email;
-  const partnerName = partner ? partner.split('@')[0] : 'שותף';
+  const others   = (group.members || []).filter(m => m.toLowerCase() !== myEmail.toLowerCase());
+  const partnerName = others.length ? others.map(m => m.split('@')[0]).join(', ') : 'עובד/ת לבד';
 
-  const contrib  = pair.contribution || { student1: 0, student2: 0, pair: 0 };
-  const myContrib = isS1 ? contrib.student1 : contrib.student2;
-  const partnerContrib = isS1 ? contrib.student2 : contrib.student1;
+  const contrib  = group.contribution || {};
+  const myContrib = contrib[myEmail] || 0;
 
-  const current  = parseInt(pair.current_section) || 1;
-  const percent  = pair.percent || 0;
+  const current  = parseInt(group.current_section) || 1;
+  const percent  = group.percent || 0;
 
   // בניית נקודות הסעיפים
   const dots = Array.from({length: 8}, (_, i) => {
@@ -222,7 +220,7 @@ function renderDashboard(pair, classAvg) {
       <div class="hero-top">
         <div class="hero-greeting">
           <h2>שלום, ${name.split(' ')[0]}!</h2>
-          <p>🤝 שותף: ${partnerName} · אתר: ${pair.site_name || 'לא נבחר עדיין'}</p>
+          <p>🤝 ${others.length ? 'חברי הקבוצה: ' + partnerName : partnerName} · אתר: ${group.site_name || 'לא נבחר עדיין'}</p>
         </div>
         <div class="hero-badge">
           <div class="hero-badge-num">${percent}%</div>
@@ -249,7 +247,7 @@ function renderDashboard(pair, classAvg) {
     <div class="rank-card">
       <div class="rank-title">📊 מיקום בכיתה (כמותי בלבד)</div>
       <div class="rank-bar-wrap">
-        <div class="rank-label">הזוג שלי</div>
+        <div class="rank-label">הקבוצה שלי</div>
         <div class="rank-bar"><div class="rank-fill me" style="width:${percent}%"></div></div>
         <div class="rank-pct" style="color:var(--blue-light)">${percent}%</div>
       </div>
@@ -269,15 +267,16 @@ function renderDashboard(pair, classAvg) {
         <div class="contrib-bar"><div class="contrib-fill me" style="width:${myContrib}%"></div></div>
         <div class="contrib-pct" style="color:var(--blue-light)">${myContrib}%</div>
       </div>
+      ${others.map(m => `
       <div class="contrib-row">
-        <div class="contrib-label">${partnerName} (solo)</div>
-        <div class="contrib-bar"><div class="contrib-fill partner" style="width:${partnerContrib}%"></div></div>
-        <div class="contrib-pct" style="color:var(--teal)">${partnerContrib}%</div>
-      </div>
+        <div class="contrib-label">${m.split('@')[0]} (solo)</div>
+        <div class="contrib-bar"><div class="contrib-fill partner" style="width:${contrib[m]||0}%"></div></div>
+        <div class="contrib-pct" style="color:var(--teal)">${contrib[m]||0}%</div>
+      </div>`).join('')}
       <div class="contrib-row">
         <div class="contrib-label">ביחד</div>
-        <div class="contrib-bar"><div class="contrib-fill pair" style="width:${contrib.pair}%"></div></div>
-        <div class="contrib-pct" style="color:var(--purple-light)">${contrib.pair}%</div>
+        <div class="contrib-bar"><div class="contrib-fill pair" style="width:${contrib.pair||0}%"></div></div>
+        <div class="contrib-pct" style="color:var(--purple-light)">${contrib.pair||0}%</div>
       </div>
     </div>
   `;
