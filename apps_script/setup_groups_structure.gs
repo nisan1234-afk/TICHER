@@ -5,6 +5,14 @@
  * (12n0CXdLqws58H8LIvRobfX08U4adDTllEQEOQLDLDR4).
  * לא מוחק את pairs — נשאר כגיבוי/היסטוריה, פשוט לא ישמש יותר את ה-API.
  * בטוח להרצה חוזרת: אם groups כבר קיים, לא יוצר אותו מחדש.
+ *
+ * לפני הרצה: לעשות עותק של הגיליון (קובץ → יצירת עותק) ליתר ביטחון —
+ * זו הפעולה היחידה כאן שאין לה "בטל" (Undo) פשוט.
+ *
+ * חשוב לגבי עיתוי: מריצים את זה ומחליפים מייד את קוד ה-API לגרסה v2 באותה
+ * ישיבה, בלי פער — כי מרגע שהכותרת ב-projects/activity_log משתנה מ-pair_id
+ * ל-group_id, גרסת ה-API הישנה (v1) שעדיין פרוסה תתחיל גם היא לכתוב שורות
+ * "יתומות" (היא עדיין כותבת לפי pair_id).
  */
 
 function migratePairsToGroups() {
@@ -29,28 +37,49 @@ function migratePairsToGroups() {
     const idx = {};
     pairsHeaders.forEach((h, i) => idx[h] = i);
 
-    for (let r = 1; r < pairsData.length; r++) {
-      const row = pairsData[r];
-      const student1 = row[idx.student1_email] || '';
-      const student2 = row[idx.student2_email] || '';
-      const members = [student1, student2].filter(Boolean).join(',');
-      const pairId  = row[idx.pair_id];
+    const newRows = [];
+    const skipped = [];
 
-      groupsSheet.appendRow([
-        pairId,
-        row[idx.class_id] || '',
-        'קבוצה ' + pairId.replace('pair_', ''),
-        members,
-        row[idx.teacher_email] || '',
-        row[idx.site_name] || '',
-        row[idx.site_url] || '',
-        row[idx.site_score] || '',
-        row[idx.current_section] || 1,
-        row[idx.last_active] || '',
-        row[idx.created_date] || ''
-      ]);
+    for (let r = 1; r < pairsData.length; r++) {
+      try {
+        const row = pairsData[r];
+        const pairId = row[idx.pair_id];
+
+        if (!pairId || String(pairId).trim() === '') {
+          skipped.push('שורה ' + (r + 1) + ': pair_id ריק — דולג.');
+          continue;
+        }
+
+        const student1 = row[idx.student1_email] || '';
+        const student2 = row[idx.student2_email] || '';
+        const members = [student1, student2].filter(Boolean).join(',');
+        const displayNum = String(pairId).indexOf('pair_') === 0 ? String(pairId).slice(5) : String(pairId);
+
+        newRows.push([
+          pairId,
+          row[idx.class_id] || '',
+          'קבוצה ' + displayNum,
+          members,
+          row[idx.teacher_email] || '',
+          row[idx.site_name] || '',
+          row[idx.site_url] || '',
+          row[idx.site_score] || '',
+          row[idx.current_section] || 1,
+          row[idx.last_active] || '',
+          row[idx.created_date] || ''
+        ]);
+      } catch (rowErr) {
+        skipped.push('שורה ' + (r + 1) + ': שגיאה — ' + rowErr.message);
+      }
     }
-    Logger.log('הועברו ' + (pairsData.length - 1) + ' קבוצות מ-pairs ל-groups.');
+
+    if (newRows.length > 0) {
+      groupsSheet.getRange(2, 1, newRows.length, newRows[0].length).setValues(newRows);
+    }
+    Logger.log('הועברו ' + newRows.length + ' קבוצות מ-pairs ל-groups.');
+    if (skipped.length > 0) {
+      Logger.log('דולגו ' + skipped.length + ' שורות:\n' + skipped.join('\n'));
+    }
   }
 
   let filesSheet = ss.getSheetByName('files');

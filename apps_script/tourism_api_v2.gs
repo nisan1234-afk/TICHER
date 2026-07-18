@@ -35,6 +35,21 @@ function getGeminiKey() {
   return key;
 }
 
+/**
+ * נעילה סביב קריאה-שינוי-כתיבה (find row index, then write to it) —
+ * בלי זה, שני תלמידים שכותבים לאותה קבוצה כמעט בו-זמנית (autosave, כמה מכשירים)
+ * עלולים לדרוס שינוי אחד את השני בלי שגיאה. ממתין עד 10 שניות לנעילה.
+ */
+function withLock(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ========== נקודת כניסה ==========
 
 function doPost(e) {
@@ -320,73 +335,77 @@ function saveSection({ verifiedEmail, group_id, section_num, content, device_id 
     throw new Error('אין הרשאה לערוך קבוצה זו');
   }
 
-  const projectsSheet = ss.getSheetByName('projects');
-  const projects      = sheetToObjects(projectsSheet);
-  const projIdx       = projects.findIndex(p => p.group_id == group_id || p.pair_id == group_id);
+  return withLock(() => {
+    const projectsSheet = ss.getSheetByName('projects');
+    const projects      = sheetToObjects(projectsSheet);
+    const projIdx       = projects.findIndex(p => p.group_id == group_id || p.pair_id == group_id);
 
-  if (projIdx === -1) {
-    const newRow = { group_id };
-    for (let i = 1; i <= 8; i++) newRow['section_' + i] = '';
-    newRow['section_' + section_num] = content;
-    newRow.last_updated = now;
-    appendRow(projectsSheet, newRow);
-  } else {
-    const headers = getHeaders(projectsSheet);
-    const rowNum  = projIdx + 2;
-    const colIdx  = headers.indexOf('section_' + section_num) + 1;
-    const updIdx  = headers.indexOf('last_updated') + 1;
-    if (colIdx > 0) projectsSheet.getRange(rowNum, colIdx).setValue(content);
-    if (updIdx > 0) projectsSheet.getRange(rowNum, updIdx).setValue(now);
-  }
+    if (projIdx === -1) {
+      const newRow = { group_id };
+      for (let i = 1; i <= 8; i++) newRow['section_' + i] = '';
+      newRow['section_' + section_num] = content;
+      newRow.last_updated = now;
+      appendRow(projectsSheet, newRow);
+    } else {
+      const headers = getHeaders(projectsSheet);
+      const rowNum  = projIdx + 2;
+      const colIdx  = headers.indexOf('section_' + section_num) + 1;
+      const updIdx  = headers.indexOf('last_updated') + 1;
+      if (colIdx > 0) projectsSheet.getRange(rowNum, colIdx).setValue(content);
+      if (updIdx > 0) projectsSheet.getRange(rowNum, updIdx).setValue(now);
+    }
 
-  const groupsSheet = ss.getSheetByName('groups');
-  const groupsData  = sheetToObjects(groupsSheet);
-  const groupIdx    = groupsData.findIndex(g => g.group_id == group_id);
-  if (groupIdx !== -1) {
-    const headers = getHeaders(groupsSheet);
-    const rowNum  = groupIdx + 2;
-    const csIdx   = headers.indexOf('current_section') + 1;
-    const laIdx   = headers.indexOf('last_active') + 1;
-    if (csIdx > 0) groupsSheet.getRange(rowNum, csIdx).setValue(section_num);
-    if (laIdx > 0) groupsSheet.getRange(rowNum, laIdx).setValue(now);
-  }
+    const groupsSheet = ss.getSheetByName('groups');
+    const groupsData  = sheetToObjects(groupsSheet);
+    const groupIdx    = groupsData.findIndex(g => g.group_id == group_id);
+    if (groupIdx !== -1) {
+      const headers = getHeaders(groupsSheet);
+      const rowNum  = groupIdx + 2;
+      const csIdx   = headers.indexOf('current_section') + 1;
+      const laIdx   = headers.indexOf('last_active') + 1;
+      if (csIdx > 0) groupsSheet.getRange(rowNum, csIdx).setValue(section_num);
+      if (laIdx > 0) groupsSheet.getRange(rowNum, laIdx).setValue(now);
+    }
 
-  const logSheet   = ss.getSheetByName('activity_log');
-  const soloOrPair = isGroupActive(ss, group_id, verifiedEmail) ? 'pair' : 'solo';
-  appendRow(logSheet, {
-    log_id:        Utilities.getUuid(),
-    group_id,
-    student_email: verifiedEmail,
-    device_id:     device_id || 'unknown',
-    action:        'save_section',
-    section:       section_num,
-    timestamp:     now,
-    duration_sec:  0,
-    solo_or_pair:  soloOrPair
+    const logSheet   = ss.getSheetByName('activity_log');
+    const soloOrPair = isGroupActive(ss, group_id, verifiedEmail) ? 'pair' : 'solo';
+    appendRow(logSheet, {
+      log_id:        Utilities.getUuid(),
+      group_id,
+      student_email: verifiedEmail,
+      device_id:     device_id || 'unknown',
+      action:        'save_section',
+      section:       section_num,
+      timestamp:     now,
+      duration_sec:  0,
+      solo_or_pair:  soloOrPair
+    });
+
+    return { saved: true, timestamp: now };
   });
-
-  return { saved: true, timestamp: now };
 }
 
 function toggleUnit({ verifiedEmail, unit_id, is_open }) {
   requireRole(verifiedEmail, ['teacher','admin','school_admin']);
   const now = new Date().toISOString();
 
-  const ss         = SpreadsheetApp.openById(SHEETS.TOURISM);
-  const unitsSheet = ss.getSheetByName('units');
-  const units      = sheetToObjects(unitsSheet);
-  const headers    = getHeaders(unitsSheet);
+  return withLock(() => {
+    const ss         = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const unitsSheet = ss.getSheetByName('units');
+    const units      = sheetToObjects(unitsSheet);
+    const headers    = getHeaders(unitsSheet);
 
-  const idx = units.findIndex(u => u.unit_id == unit_id && u.teacher_email == verifiedEmail);
-  if (idx === -1) throw new Error('יחידה לא נמצאה');
+    const idx = units.findIndex(u => u.unit_id == unit_id && u.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('יחידה לא נמצאה');
 
-  const rowNum  = idx + 2;
-  const openIdx = headers.indexOf('is_open') + 1;
-  const dateIdx = headers.indexOf('open_date') + 1;
-  if (openIdx > 0) unitsSheet.getRange(rowNum, openIdx).setValue(is_open ? 'TRUE' : 'FALSE');
-  if (dateIdx > 0 && is_open) unitsSheet.getRange(rowNum, dateIdx).setValue(now);
+    const rowNum  = idx + 2;
+    const openIdx = headers.indexOf('is_open') + 1;
+    const dateIdx = headers.indexOf('open_date') + 1;
+    if (openIdx > 0) unitsSheet.getRange(rowNum, openIdx).setValue(is_open ? 'TRUE' : 'FALSE');
+    if (dateIdx > 0 && is_open) unitsSheet.getRange(rowNum, dateIdx).setValue(now);
 
-  return { unit_id, is_open };
+    return { unit_id, is_open };
+  });
 }
 
 function addGroup({ verifiedEmail, class_id, group_name, members }) {
@@ -426,46 +445,50 @@ function addGroup({ verifiedEmail, class_id, group_name, members }) {
 
 function addMember({ verifiedEmail, group_id, member_email }) {
   requireRole(verifiedEmail, ['teacher','admin','school_admin']);
-  const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
-  const sheet = ss.getSheetByName('groups');
-  const groups = sheetToObjects(sheet);
-  const idx    = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
-  if (idx === -1) throw new Error('קבוצה לא נמצאה');
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('groups');
+    const groups = sheetToObjects(sheet);
+    const idx    = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('קבוצה לא נמצאה');
 
-  const members = String(groups[idx].members || '').split(',').map(m => m.trim()).filter(Boolean);
-  const emailLower = String(member_email).trim().toLowerCase();
-  if (members.some(m => m.toLowerCase() === emailLower)) {
-    throw new Error('התלמיד כבר בקבוצה');
-  }
-  members.push(String(member_email).trim());
+    const members = String(groups[idx].members || '').split(',').map(m => m.trim()).filter(Boolean);
+    const emailLower = String(member_email).trim().toLowerCase();
+    if (members.some(m => m.toLowerCase() === emailLower)) {
+      throw new Error('התלמיד כבר בקבוצה');
+    }
+    members.push(String(member_email).trim());
 
-  const headers = getHeaders(sheet);
-  const rowNum  = idx + 2;
-  const colIdx  = headers.indexOf('members') + 1;
-  sheet.getRange(rowNum, colIdx).setValue(members.join(','));
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    const colIdx  = headers.indexOf('members') + 1;
+    sheet.getRange(rowNum, colIdx).setValue(members.join(','));
 
-  return { group_id, members };
+    return { group_id, members };
+  });
 }
 
 function removeMember({ verifiedEmail, group_id, member_email }) {
   requireRole(verifiedEmail, ['teacher','admin','school_admin']);
-  const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
-  const sheet = ss.getSheetByName('groups');
-  const groups = sheetToObjects(sheet);
-  const idx    = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
-  if (idx === -1) throw new Error('קבוצה לא נמצאה');
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('groups');
+    const groups = sheetToObjects(sheet);
+    const idx    = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('קבוצה לא נמצאה');
 
-  const emailLower = String(member_email).trim().toLowerCase();
-  const members = String(groups[idx].members || '')
-    .split(',').map(m => m.trim()).filter(Boolean)
-    .filter(m => m.toLowerCase() !== emailLower);
+    const emailLower = String(member_email).trim().toLowerCase();
+    const members = String(groups[idx].members || '')
+      .split(',').map(m => m.trim()).filter(Boolean)
+      .filter(m => m.toLowerCase() !== emailLower);
 
-  const headers = getHeaders(sheet);
-  const rowNum  = idx + 2;
-  const colIdx  = headers.indexOf('members') + 1;
-  sheet.getRange(rowNum, colIdx).setValue(members.join(','));
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    const colIdx  = headers.indexOf('members') + 1;
+    sheet.getRange(rowNum, colIdx).setValue(members.join(','));
 
-  return { group_id, members };
+    return { group_id, members };
+  });
 }
 
 // ========== קבצים ==========
@@ -544,7 +567,18 @@ function getOrCreateSubfolder(parentFolder, name) {
 
 // ========== Gemini (בחירת אתר + צ'אטבוט) ==========
 
+/**
+ * מתג כיבוי מהיר לפיצ'רי ה-AI (צ'אטבוט + התאמת אתר) בלי לגעת בקוד או לפרוס מחדש:
+ * Script Properties → AI_FEATURES_ENABLED = false
+ */
+function areAiFeaturesEnabled() {
+  const val = PropertiesService.getScriptProperties().getProperty('AI_FEATURES_ENABLED');
+  return val !== 'false';
+}
+
 function callGemini(systemPrompt, userMessage) {
+  if (!areAiFeaturesEnabled()) throw new Error('פיצ׳רי ה-AI כבויים זמנית');
+
   const res = UrlFetchApp.fetch(
     'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent?key=' + getGeminiKey(),
     {
@@ -616,7 +650,16 @@ function chatWithBot({ verifiedEmail, group_id, section_num, message }) {
   const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
   const groups = sheetToObjects(ss.getSheetByName('groups'));
   const group  = groups.find(g => g.group_id == group_id);
-  const siteContext = group && group.site_name ? 'האתר שהקבוצה בוחרת לנתח: ' + group.site_name + '.' : '';
+  if (!group) throw new Error('קבוצה לא נמצאה');
+
+  const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+  const roles   = getRoles(SpreadsheetApp.openById(SHEETS.KITA_PLUS), verifiedEmail);
+  const isTeacher = roles.some(r => ['teacher','admin','school_admin'].includes(r));
+  if (!members.includes(String(verifiedEmail).toLowerCase()) && !isTeacher) {
+    throw new Error('אין הרשאה לגשת לצ׳אטבוט של קבוצה זו');
+  }
+
+  const siteContext = group.site_name ? 'האתר שהקבוצה בוחרת לנתח: ' + group.site_name + '.' : '';
 
   const SECTION_NAMES = ['', 'פרטי האתר', 'תיאור כללי', 'נוכחות דיגיטלית', 'מושגים', 'חוויית משתמש', 'עוצמות', 'הצעות לשיפור', 'סיכום אישי'];
   const sectionName = SECTION_NAMES[section_num] || '';
