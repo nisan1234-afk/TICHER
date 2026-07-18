@@ -13,10 +13,16 @@
  * ישיבה, בלי פער — כי מרגע שהכותרת ב-projects/activity_log משתנה מ-pair_id
  * ל-group_id, גרסת ה-API הישנה (v1) שעדיין פרוסה תתחיל גם היא לכתוב שורות
  * "יתומות" (היא עדיין כותבת לפי pair_id).
+ *
+ * פותח את הגיליון לפי ה-ID שלו במפורש (לא getActiveSpreadsheet) —
+ * כך שזה עובד תמיד על הגיליון הנכון, גם אם מריצים מפרויקט Apps Script
+ * שלא בטוח מ"קושר" (bound) לגיליון הזה.
  */
 
+const TOURISM_SHEET_ID = '12n0CXdLqws58H8LIvRobfX08U4adDTllEQEOQLDLDR4';
+
 function migratePairsToGroups() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(TOURISM_SHEET_ID);
   const pairsSheet = ss.getSheetByName('pairs');
   if (!pairsSheet) throw new Error('לא נמצא טאב pairs');
 
