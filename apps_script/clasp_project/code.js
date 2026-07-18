@@ -23,7 +23,7 @@ const ALLOWED_ORIGIN = 'https://nisan1234-afk.github.io';
 const DRIVE_FOLDER    = '1SviWtQGsfCB6Yaxs_TwuPCSjFZlUahly';
 const GOOGLE_CLIENT_ID = '988232727899-pajp4mhs43tet1phcu3rc8c8mutsgpme.apps.googleusercontent.com';
 const TOURISM_SUBJECT_NAME = 'תיירות דיגיטלית';
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-flash-latest';
 
 /**
  * המפתח נשמר ב-Script Properties (לא בקוד, לא ב-HTML הציבורי):
@@ -592,10 +592,15 @@ function callGemini(systemPrompt, userMessage) {
     }
   );
   const data = JSON.parse(res.getContentText());
+
+  if (data.error) {
+    throw new Error('Gemini החזיר שגיאה (קוד ' + data.error.code + '): ' + data.error.message);
+  }
+
   const text = data.candidates && data.candidates[0] && data.candidates[0].content
     ? data.candidates[0].content.parts[0].text
     : '';
-  if (!text) throw new Error('Gemini לא החזיר תשובה');
+  if (!text) throw new Error('Gemini לא החזיר תשובה. תגובה גולמית: ' + res.getContentText().slice(0, 300));
   return text;
 }
 
