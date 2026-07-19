@@ -353,11 +353,15 @@ function getGroupData({ verifiedEmail, group_id }) {
     comments['section_' + i] = project['section_' + i + '_comment'] || '';
   }
 
+  const answers = sheetToObjects(ensureLessonAnswersSheet(ss)).filter(a => a.group_id == group_id);
+  const total_score = answers.reduce((sum, a) => sum + (Number(a.score) || 0), 0);
+
   return {
     group: { ...group, members },
     sections,
     teacherEdits,
     comments,
+    total_score,
     contribution:  calcContribution(groupLogs, members),
     last_updated:  project.last_updated
   };
@@ -575,7 +579,9 @@ function getGroupLessons({ verifiedEmail, group_id }) {
           }
           if (b.block_type === 'question') {
             const existing = allAnswers.find(a => a.block_id === b.block_id);
-            block.saved_answer = existing ? existing.answer_text : '';
+            block.saved_answer   = existing ? existing.answer_text : '';
+            block.saved_score    = existing && existing.score !== '' ? existing.score : null;
+            block.saved_feedback = existing ? (existing.score_feedback || '') : '';
           }
           return block;
         });
@@ -603,6 +609,11 @@ function getGroupLessons({ verifiedEmail, group_id }) {
  * זה המקור להערכה/ציון של המורה על השאלות האישיות. לא נוגעת בטאב projects —
  * התשובה מוצגת לתלמיד בתוך עמוד הסעיף המתאים כפריט נפרד, לא מוזגת אוטומטית
  * לתוך שדה הטקסט החופשי (כדי לא לדרוס ניסוח עצמאי של התלמיד).
+ *
+ * ניקוד: לפי בקשת ניסן (2026-07-20) — הצ'אטבוט מעריך את רמת הפירוט/הדיוק של
+ * התשובה (לא "נכון/לא נכון", זו שאלת יישום אישית) ונותן 0-10 + משוב קצר.
+ * הניקוד מצטבר לתלמיד ככל שהוא מתקדם. אם הצ'אטבוט נכשל — התשובה עדיין נשמרת,
+ * רק בלי ניקוד הפעם (לא חוסם את השמירה).
  */
 function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_text }) {
   const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
@@ -615,8 +626,29 @@ function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_t
     throw new Error('אין הרשאה לשמור תשובה עבור קבוצה זו');
   }
 
+  let score = '', scoreFeedback = '';
+  if (answer_text && answer_text.trim().length > 0) {
+    try {
+      const blocks = sheetToObjects(ensureLessonBlocksSheet(ss));
+      const block  = blocks.find(b => b.block_id === block_id);
+      const prompt = block ? block.question_prompt : '';
+      const systemPrompt = `אתה מעריך תשובה של תלמיד תיכון לשאלה אישית בפרויקט תיירות דיגיטלית.
+נוסח השאלה: "${prompt}"
+זו לא שאלת נכון/לא נכון — הערך רק לפי רמת הפירוט והדיוק: האם התלמיד נתן דוגמה קונקרטית וספציפית מהאתר שבחר, או תשובה כללית וסתמית שיכולה להתאים לכל אתר.
+תן משוב קצר וממוקד (משפט אחד, בעברית, טון מעודד אך כן).
+בסיום, בשורה נפרדת, כתוב בדיוק: SCORE: X כאשר X הוא מספר שלם בין 0 ל-10.`;
+      const reply = callGemini(systemPrompt, answer_text);
+      const scoreMatch = reply.match(/SCORE:\s*(\d+)/);
+      score = scoreMatch ? Math.min(10, parseInt(scoreMatch[1])) : '';
+      scoreFeedback = reply.replace(/SCORE:\s*\d+/, '').trim();
+    } catch (e) {
+      score = ''; scoreFeedback = '';
+    }
+  }
+
   return withLock(() => {
     const sheet   = ensureLessonAnswersSheet(ss);
+    ensureLessonAnswersScoreColumns(sheet);
     const answers = sheetToObjects(sheet);
     const now     = new Date().toISOString();
     const idx     = answers.findIndex(a => a.group_id == group_id && a.block_id === block_id);
@@ -627,21 +659,31 @@ function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_t
         group_id, unit_id, block_id,
         answer_text: answer_text || '',
         updated_by:  verifiedEmail,
-        updated_at:  now
+        updated_at:  now,
+        score, score_feedback: scoreFeedback
       });
     } else {
       const headers = getHeaders(sheet);
       const rowNum  = idx + 2;
-      const textIdx = headers.indexOf('answer_text') + 1;
-      const byIdx   = headers.indexOf('updated_by') + 1;
-      const atIdx   = headers.indexOf('updated_at') + 1;
-      if (textIdx > 0) sheet.getRange(rowNum, textIdx).setValue(answer_text || '');
-      if (byIdx > 0)   sheet.getRange(rowNum, byIdx).setValue(verifiedEmail);
-      if (atIdx > 0)   sheet.getRange(rowNum, atIdx).setValue(now);
+      const fields  = { answer_text: answer_text || '', updated_by: verifiedEmail, updated_at: now, score, score_feedback: scoreFeedback };
+      Object.keys(fields).forEach(key => {
+        const colIdx = headers.indexOf(key) + 1;
+        if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
+      });
     }
 
-    return { saved: true, updated_at: now };
+    return { saved: true, updated_at: now, score, score_feedback: scoreFeedback };
   });
+}
+
+/** מוסיפה עמודות score/score_feedback לטאב lesson_answers אם עוד לא קיימות. */
+function ensureLessonAnswersScoreColumns(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  const headers = headerRange.getValues()[0];
+  const needed = ['score', 'score_feedback'].filter(h => headers.indexOf(h) === -1);
+  if (needed.length === 0) return;
+  const startCol = sheet.getLastColumn() + 1;
+  sheet.getRange(1, startCol, 1, needed.length).setValues([needed]);
 }
 
 /**
