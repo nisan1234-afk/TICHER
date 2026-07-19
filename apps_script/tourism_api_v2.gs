@@ -59,7 +59,7 @@ function doPost(e) {
 
     const protectedActions = [
       'getMyProfile', 'getTeacherDashboard', 'getGroupData',
-      'saveSection', 'toggleUnit', 'addUnit', 'getGroupLessons', 'getAdminData',
+      'saveSection', 'toggleUnit', 'addUnit', 'updateLesson', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
       'proposeSite', 'chatWithBot'
@@ -84,6 +84,7 @@ function doPost(e) {
       saveSection:         () => saveSection(body),
       toggleUnit:          () => toggleUnit(body),
       addUnit:             () => addUnit(body),
+      updateLesson:        () => updateLesson(body),
       getGroupLessons:     () => getGroupLessons(body),
 
       addGroup:            () => addGroup(body),
@@ -353,7 +354,9 @@ function getGroupLessons({ verifiedEmail, group_id }) {
       section_linked:      u.section_linked || '',
       source_type:         u.source_type || '',
       summary:             u.summary || '',
-      assignment_summary:  u.assignment_summary || ''
+      assignment_summary:  u.assignment_summary || '',
+      image_url:           u.image_url || '',
+      embed_url:           u.embed_url || ''
     }));
 
   return { lessons };
@@ -470,6 +473,51 @@ function addUnit({ verifiedEmail, unit_name, section_linked, is_open }) {
 
     return { unit_id, created: true };
   });
+}
+
+/**
+ * מאפשרת למורה לערוך תוכן יחידה קיימת (שם, סעיף, תקציר, תקציר עבודה) —
+ * גם ליחידות שהמורה יצר וגם ל-9 יחידות הלימוד שנזרעו (שייכות אליו, teacher_email תואם).
+ * לא נוגעת ב-is_open/open_date — זה עדיין דרך toggleUnit.
+ */
+function updateLesson({ verifiedEmail, unit_id, unit_name, section_linked, summary, assignment_summary, image_url, embed_url }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('units');
+
+    ensureUnitMediaColumns(sheet);
+
+    const units = sheetToObjects(sheet);
+    const idx   = units.findIndex(u => u.unit_id == unit_id && u.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('יחידה לא נמצאה');
+
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    const fields  = { unit_name, section_linked, summary, assignment_summary, image_url, embed_url };
+
+    Object.keys(fields).forEach(key => {
+      if (fields[key] === undefined) return;
+      const colIdx = headers.indexOf(key) + 1;
+      if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
+    });
+
+    return { unit_id, updated: true };
+  });
+}
+
+/**
+ * מוסיפה image_url/embed_url לטאב units אם הן עוד לא קיימות — כדי ש-updateLesson
+ * יעבוד גם בלי להריץ שוב ידנית את seedCurriculumLessons.
+ */
+function ensureUnitMediaColumns(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  const headers = headerRange.getValues()[0];
+  const needed = ['image_url', 'embed_url'].filter(h => headers.indexOf(h) === -1);
+  if (needed.length === 0) return;
+  const startCol = sheet.getLastColumn() + 1;
+  sheet.getRange(1, startCol, 1, needed.length).setValues([needed]);
 }
 
 function addGroup({ verifiedEmail, class_id, group_name, members }) {
