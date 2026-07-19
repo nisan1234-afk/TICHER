@@ -326,11 +326,13 @@ function getGroupData({ verifiedEmail, group_id }) {
 }
 
 /**
- * מחזירה לתלמיד את יחידות הלימוד הפתוחות של המורה של הקבוצה שלו.
+ * מחזירה לתלמיד את יחידות הלימוד של המורה של הקבוצה שלו.
  * getTeacherDashboard מחזיר units רק כשקוראים לו כמורה (מסנן לפי teacher_email
  * של הקורא עצמו) — תלמיד לא יכול לקבל דרכו את היחידות של המורה שלו. זו הפעולה
- * המקבילה לתלמידים: מוצאת את הקבוצה → את teacher_email שלה → מחזירה רק
- * יחידות פתוחות (is_open=TRUE) של אותו מורה, כולל תוכן.
+ * המקבילה לתלמידים: מוצאת את הקבוצה → את teacher_email שלה → מחזירה את כל
+ * היחידות של אותו מורה, כולל תוכן.
+ * הערה: נעילת is_open כבויה בכוונה לפי בקשת המורה — כל היחידות פתוחות תמיד.
+ * המנגנון (is_open/toggleUnit) נשאר קיים ולא נמחק, ישמש בעתיד לנעילת מבחנים.
  */
 function getGroupLessons({ verifiedEmail, group_id }) {
   const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
@@ -345,7 +347,7 @@ function getGroupLessons({ verifiedEmail, group_id }) {
 
   const allUnits = sheetToObjects(ss.getSheetByName('units'));
   const lessons = allUnits
-    .filter(u => u.teacher_email === group.teacher_email && (u.is_open === 'TRUE' || u.is_open === true))
+    .filter(u => u.teacher_email === group.teacher_email)
     .sort((a, b) => (Number(a.lesson_num) || 99) - (Number(b.lesson_num) || 99))
     .map(u => ({
       unit_id:            u.unit_id,
