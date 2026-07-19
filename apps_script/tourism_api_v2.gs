@@ -794,7 +794,7 @@ function addUnit({ verifiedEmail, unit_name, section_linked, is_open }) {
  * גם ליחידות שהמורה יצר וגם ל-9 יחידות הלימוד שנזרעו (שייכות אליו, teacher_email תואם).
  * לא נוגעת ב-is_open/open_date — זה עדיין דרך toggleUnit.
  */
-function updateLesson({ verifiedEmail, unit_id, unit_name, section_linked, summary, assignment_summary, image_url, embed_url }) {
+function updateLesson({ verifiedEmail, unit_id, unit_name, section_linked, summary, assignment_summary, image_url, embed_url, planned_month }) {
   requireRole(verifiedEmail, ['teacher','admin','school_admin']);
 
   return withLock(() => {
@@ -802,6 +802,7 @@ function updateLesson({ verifiedEmail, unit_id, unit_name, section_linked, summa
     const sheet = ss.getSheetByName('units');
 
     ensureUnitMediaColumns(sheet);
+    ensureUnitPlannedMonthColumn(sheet);
 
     const units = sheetToObjects(sheet);
     const idx   = units.findIndex(u => u.unit_id == unit_id && u.teacher_email == verifiedEmail);
@@ -809,7 +810,7 @@ function updateLesson({ verifiedEmail, unit_id, unit_name, section_linked, summa
 
     const headers = getHeaders(sheet);
     const rowNum  = idx + 2;
-    const fields  = { unit_name, section_linked, summary, assignment_summary, image_url, embed_url };
+    const fields  = { unit_name, section_linked, summary, assignment_summary, image_url, embed_url, planned_month };
 
     Object.keys(fields).forEach(key => {
       if (fields[key] === undefined) return;
@@ -832,6 +833,14 @@ function ensureUnitMediaColumns(sheet) {
   if (needed.length === 0) return;
   const startCol = sheet.getLastColumn() + 1;
   sheet.getRange(1, startCol, 1, needed.length).setValues([needed]);
+}
+
+/** מוסיפה עמודת planned_month (חודש מתוכנן ללימוד היחידה) לטאב units אם עוד לא קיימת. */
+function ensureUnitPlannedMonthColumn(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  const headers = headerRange.getValues()[0];
+  if (headers.indexOf('planned_month') !== -1) return;
+  sheet.getRange(1, sheet.getLastColumn() + 1).setValue('planned_month');
 }
 
 function addGroup({ verifiedEmail, class_id, group_name, members }) {

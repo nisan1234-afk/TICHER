@@ -93,6 +93,43 @@ const LESSONS_SEED_DATA = [
   }
 ];
 
+/**
+ * מיגרציה חד-פעמית: קובעת "חודש מתוכנן" לכל אחת מ-9 היחידות, לפי חלוקה שנתית
+ * שסוכמה עם ניסן (2026-07-19) — שנת לימודים 1.9.26 עד פורים (סוף מרץ 27),
+ * 3 שעות שבועיות (שני שעה + רביעי שעתיים), עם חגי תשרי/חנוכה בחשבון.
+ * לא קובעת מסמרות — ניסן יכול לשנות כל יחידה בנפרד דרך "ערוך" בדשבורד.
+ */
+const PLANNED_MONTHS = {
+  lesson_1: 'ספטמבר',
+  lesson_2: 'אוקטובר',
+  lesson_3: 'אוקטובר',
+  lesson_4: 'נובמבר',
+  lesson_5: 'נובמבר',
+  lesson_6: 'דצמבר',
+  lesson_7: 'ינואר',
+  lesson_8: 'ינואר',
+  lesson_9: 'פברואר'
+};
+
+function seedPlannedMonths() {
+  const ss    = SpreadsheetApp.openById(TOURISM_SHEET_ID);
+  const sheet = ss.getSheetByName('units');
+  ensureUnitPlannedMonthColumn(sheet);
+
+  const units   = sheetToObjects(sheet);
+  const headers = getHeaders(sheet);
+  const colIdx  = headers.indexOf('planned_month') + 1;
+  let updated = 0;
+
+  units.forEach((u, i) => {
+    if (PLANNED_MONTHS[u.unit_id] && !u.planned_month) {
+      sheet.getRange(i + 2, colIdx).setValue(PLANNED_MONTHS[u.unit_id]);
+      updated++;
+    }
+  });
+  Logger.log('נקבע חודש מתוכנן ל-' + updated + ' יחידות.');
+}
+
 function seedCurriculumLessons() {
   const ss = SpreadsheetApp.openById(TOURISM_SHEET_ID);
   const sheet = ss.getSheetByName('units');
