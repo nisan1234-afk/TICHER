@@ -46,6 +46,45 @@ function seedLessonBlocks() {
   Logger.log('נזרעו בלוקים ל-' + addedUnits + ' יחידות (' + addedBlocks + ' בלוקים בסה"כ).');
 }
 
+/**
+ * הוספה חד-פעמית של בלוק משחק/מילון-מושגים ליחידה 7 (יעד חכם) — במקור לא
+ * נוספה יחידת משחק כי החומר המקורי (ראו הערה ב-LESSON_BLOCKS_SEED_DATA) דל,
+ * אבל התוכן הזה מבוסס ישירות על מה שכבר כתוב בבלוק ההוראה של היחידה עצמה,
+ * לא הומצא. גם משמש כמקור למילון-המושגים (טולטיפים) בשאלות. הרצה בטוחה חוזרת.
+ */
+function seedLesson7Game() {
+  const ss    = SpreadsheetApp.openById(TOURISM_SHEET_ID);
+  const sheet = ensureLessonBlocksSheet(ss);
+  const existing = sheetToObjects(sheet).filter(b => b.unit_id === 'lesson_7');
+
+  if (existing.some(b => b.block_type === 'game')) {
+    Logger.log('ליחידה 7 כבר יש בלוק משחק — דילוג.');
+    return;
+  }
+
+  const gameData = [
+    { term: 'יעד חכם', definition: 'יעד תיירותי שמשתמש בטכנולוגיה לשיפור חוויית המבקר' },
+    { term: 'סביבה (בתיירות חכמה)', definition: 'ניטור איכות אוויר ומשאבי טבע ביעד' },
+    { term: 'תחבורה (בתיירות חכמה)', definition: 'ניווט חכם ותחבורה ציבורית בזמן אמת' },
+    { term: 'כלכלה (בתיירות חכמה)', definition: 'תשלומים דיגיטליים ותמחור מותאם אישית' },
+    { term: 'חיים ואנשים (בתיירות חכמה)', definition: 'Wi-Fi ציבורי, שירותים דיגיטליים, הכשרת עובדים' }
+  ];
+
+  const nextOrder = existing.length + 1;
+  appendRow(sheet, {
+    block_id: 'lesson_7_block_' + nextOrder,
+    unit_id: 'lesson_7',
+    block_order: nextOrder,
+    block_type: 'game',
+    title: 'התאימו: תחום ↔ איך זה בא לידי ביטוי',
+    body: '', media_type: '', media_url: '',
+    game_type: 'memory',
+    game_data: JSON.stringify(gameData),
+    question_prompt: '', target_field: ''
+  });
+  Logger.log('נוסף בלוק משחק ליחידה 7.');
+}
+
 const LESSON_BLOCKS_SEED_DATA = {
 
   // ===== יחידה 1 — מבוא לתיירות ותיירות דיגיטלית =====
