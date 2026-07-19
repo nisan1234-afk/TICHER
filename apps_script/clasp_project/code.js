@@ -62,7 +62,9 @@ function doPost(e) {
       'saveSection', 'toggleUnit', 'addUnit', 'updateLesson', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
-      'proposeSite', 'chatWithBot'
+      'proposeSite', 'chatWithBot',
+      'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
+      'getGroupLessonAnswers'
     ];
 
     if (protectedActions.includes(action)) {
@@ -95,6 +97,13 @@ function doPost(e) {
 
       proposeSite:         () => proposeSite(body),
       chatWithBot:         () => chatWithBot(body),
+
+      saveLessonAnswer:    () => saveLessonAnswer(body),
+      addLessonBlock:      () => addLessonBlock(body),
+      updateLessonBlock:   () => updateLessonBlock(body),
+      deleteLessonBlock:   () => deleteLessonBlock(body),
+      getGroupChatLog:     () => getGroupChatLog(body),
+      getGroupLessonAnswers: () => getGroupLessonAnswers(body),
     };
 
     if (!handlers[action]) {
@@ -330,7 +339,7 @@ function getGroupData({ verifiedEmail, group_id }) {
  * getTeacherDashboard מחזיר units רק כשקוראים לו כמורה (מסנן לפי teacher_email
  * של הקורא עצמו) — תלמיד לא יכול לקבל דרכו את היחידות של המורה שלו. זו הפעולה
  * המקבילה לתלמידים: מוצאת את הקבוצה → את teacher_email שלה → מחזירה את כל
- * היחידות של אותו מורה, כולל תוכן.
+ * היחידות של אותו מורה, כולל תוכן ובלוקים (הוראה/משחק/שאלה אישית).
  * הערה: נעילת is_open כבויה בכוונה לפי בקשת המורה — כל היחידות פתוחות תמיד.
  * המנגנון (is_open/toggleUnit) נשאר קיים ולא נמחק, ישמש בעתיד לנעילת מבחנים.
  */
@@ -345,23 +354,246 @@ function getGroupLessons({ verifiedEmail, group_id }) {
     throw new Error('אין הרשאה לצפות ביחידות של קבוצה זו');
   }
 
-  const allUnits = sheetToObjects(ss.getSheetByName('units'));
+  const allUnits  = sheetToObjects(ss.getSheetByName('units'));
+  const allBlocks = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const allAnswers = sheetToObjects(ensureLessonAnswersSheet(ss))
+    .filter(a => a.group_id == group_id);
+
   const lessons = allUnits
     .filter(u => u.teacher_email === group.teacher_email)
     .sort((a, b) => (Number(a.lesson_num) || 99) - (Number(b.lesson_num) || 99))
-    .map(u => ({
-      unit_id:            u.unit_id,
-      unit_name:           u.unit_name,
-      lesson_num:          u.lesson_num || '',
-      section_linked:      u.section_linked || '',
-      source_type:         u.source_type || '',
-      summary:             u.summary || '',
-      assignment_summary:  u.assignment_summary || '',
-      image_url:           u.image_url || '',
-      embed_url:           u.embed_url || ''
-    }));
+    .map(u => {
+      const blocks = allBlocks
+        .filter(b => b.unit_id === u.unit_id)
+        .sort((a, b) => (Number(a.block_order) || 99) - (Number(b.block_order) || 99))
+        .map(b => {
+          const block = {
+            block_id:        b.block_id,
+            block_type:      b.block_type,
+            title:           b.title || '',
+            body:            b.body || '',
+            media_type:      b.media_type || '',
+            media_url:       b.media_url || '',
+            game_type:       b.game_type || '',
+            question_prompt: b.question_prompt || '',
+            target_field:    b.target_field || ''
+          };
+          if (b.block_type === 'game' && b.game_data) {
+            try { block.game_data = JSON.parse(b.game_data); } catch (e) { block.game_data = []; }
+          }
+          if (b.block_type === 'question') {
+            const existing = allAnswers.find(a => a.block_id === b.block_id);
+            block.saved_answer = existing ? existing.answer_text : '';
+          }
+          return block;
+        });
+
+      return {
+        unit_id:            u.unit_id,
+        unit_name:           u.unit_name,
+        lesson_num:          u.lesson_num || '',
+        section_linked:      u.section_linked || '',
+        source_type:         u.source_type || '',
+        summary:             u.summary || '',
+        assignment_summary:  u.assignment_summary || '',
+        image_url:           u.image_url || '',
+        embed_url:           u.embed_url || '',
+        blocks
+      };
+    });
 
   return { lessons };
+}
+
+/**
+ * שומרת תשובה של קבוצה לשאלה אישית בתוך בלוק "question" ביחידת לימוד.
+ * נכתבת בטבלת lesson_answers (רשומה גרסתית לפי group_id+block_id — upsert),
+ * זה המקור להערכה/ציון של המורה על השאלות האישיות. לא נוגעת בטאב projects —
+ * התשובה מוצגת לתלמיד בתוך עמוד הסעיף המתאים כפריט נפרד, לא מוזגת אוטומטית
+ * לתוך שדה הטקסט החופשי (כדי לא לדרוס ניסוח עצמאי של התלמיד).
+ */
+function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_text }) {
+  const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const groups = sheetToObjects(ss.getSheetByName('groups'));
+  const group  = groups.find(g => g.group_id == group_id);
+  if (!group) throw new Error('קבוצה לא נמצאה');
+
+  const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+    throw new Error('אין הרשאה לשמור תשובה עבור קבוצה זו');
+  }
+
+  return withLock(() => {
+    const sheet   = ensureLessonAnswersSheet(ss);
+    const answers = sheetToObjects(sheet);
+    const now     = new Date().toISOString();
+    const idx     = answers.findIndex(a => a.group_id == group_id && a.block_id === block_id);
+
+    if (idx === -1) {
+      appendRow(sheet, {
+        answer_id:   Utilities.getUuid(),
+        group_id, unit_id, block_id,
+        answer_text: answer_text || '',
+        updated_by:  verifiedEmail,
+        updated_at:  now
+      });
+    } else {
+      const headers = getHeaders(sheet);
+      const rowNum  = idx + 2;
+      const textIdx = headers.indexOf('answer_text') + 1;
+      const byIdx   = headers.indexOf('updated_by') + 1;
+      const atIdx   = headers.indexOf('updated_at') + 1;
+      if (textIdx > 0) sheet.getRange(rowNum, textIdx).setValue(answer_text || '');
+      if (byIdx > 0)   sheet.getRange(rowNum, byIdx).setValue(verifiedEmail);
+      if (atIdx > 0)   sheet.getRange(rowNum, atIdx).setValue(now);
+    }
+
+    return { saved: true, updated_at: now };
+  });
+}
+
+/**
+ * בונה (פעם ראשונה) או מאתרת את טאב lesson_blocks — תוכן הבלוקים בתוך כל
+ * יחידת לימוד (הוראה/משחק/שאלה אישית). לא נוגעת בטאב units עצמו.
+ */
+function ensureLessonBlocksSheet(ss) {
+  return ensureSheetWithHeaders(ss, 'lesson_blocks', [
+    'block_id', 'unit_id', 'block_order', 'block_type', 'title', 'body',
+    'media_type', 'media_url', 'game_type', 'game_data', 'question_prompt', 'target_field'
+  ]);
+}
+
+/** טאב lesson_answers — תשובות קבוצות לשאלות האישיות שבתוך בלוקים. */
+function ensureLessonAnswersSheet(ss) {
+  return ensureSheetWithHeaders(ss, 'lesson_answers', [
+    'answer_id', 'group_id', 'unit_id', 'block_id', 'answer_text', 'updated_by', 'updated_at'
+  ]);
+}
+
+/** טאב chat_logs — תיעוד שיחות הצ'אטבוט, כדי שהמורה יוכל לגשת אליהן. */
+function ensureChatLogsSheet(ss) {
+  return ensureSheetWithHeaders(ss, 'chat_logs', [
+    'log_id', 'group_id', 'student_email', 'section_num', 'role', 'message', 'timestamp'
+  ]);
+}
+
+function ensureSheetWithHeaders(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  return sheet;
+}
+
+/**
+ * CRUD לבלוקים בתוך יחידת לימוד — למורה, לעריכה ידנית אחרי הבנייה הראשונית.
+ */
+function addLessonBlock({ verifiedEmail, unit_id, block_order, block_type, title, body, media_type, media_url, game_type, game_data, question_prompt, target_field }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ensureLessonBlocksSheet(ss);
+    const block_id = 'block_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+    appendRow(sheet, {
+      block_id, unit_id,
+      block_order: block_order || 1,
+      block_type, title: title || '', body: body || '',
+      media_type: media_type || '', media_url: media_url || '',
+      game_type: game_type || '',
+      game_data: game_data ? JSON.stringify(game_data) : '',
+      question_prompt: question_prompt || '',
+      target_field: target_field || ''
+    });
+    return { block_id, created: true };
+  });
+}
+
+function updateLessonBlock({ verifiedEmail, block_id, block_order, title, body, media_type, media_url, game_type, game_data, question_prompt, target_field }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+  return withLock(() => {
+    const ss      = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet   = ensureLessonBlocksSheet(ss);
+    const blocks  = sheetToObjects(sheet);
+    const idx     = blocks.findIndex(b => b.block_id === block_id);
+    if (idx === -1) throw new Error('בלוק לא נמצא');
+
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    const fields  = { block_order, title, body, media_type, media_url, game_type, question_prompt, target_field };
+    if (game_data !== undefined) fields.game_data = JSON.stringify(game_data);
+
+    Object.keys(fields).forEach(key => {
+      if (fields[key] === undefined) return;
+      const colIdx = headers.indexOf(key) + 1;
+      if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
+    });
+
+    return { block_id, updated: true };
+  });
+}
+
+function deleteLessonBlock({ verifiedEmail, block_id }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+  return withLock(() => {
+    const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet  = ensureLessonBlocksSheet(ss);
+    const blocks = sheetToObjects(sheet);
+    const idx    = blocks.findIndex(b => b.block_id === block_id);
+    if (idx === -1) throw new Error('בלוק לא נמצא');
+    sheet.deleteRow(idx + 2);
+    return { deleted: true };
+  });
+}
+
+/**
+ * מחזירה למורה את כל תשובות הקבוצה לשאלות האישיות מתוך יחידות הלימוד,
+ * עם הקשר (שם היחידה, נוסח השאלה) — כדי שהמורה יוכל לקרוא ולתת ציון/משוב.
+ */
+function getGroupLessonAnswers({ verifiedEmail, group_id }) {
+  const ssKP  = SpreadsheetApp.openById(SHEETS.KITA_PLUS);
+  const roles = getRoles(ssKP, verifiedEmail);
+  const isTeacher = roles.some(r => ['teacher','admin','school_admin','homeroom'].includes(r));
+  if (!isTeacher) throw new Error('אין הרשאה לצפות בתשובות הקבוצה');
+
+  const ss      = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const answers = sheetToObjects(ensureLessonAnswersSheet(ss)).filter(a => a.group_id == group_id);
+  const blocks  = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const units   = sheetToObjects(ss.getSheetByName('units'));
+
+  const enriched = answers
+    .filter(a => a.answer_text)
+    .map(a => {
+      const block = blocks.find(b => b.block_id === a.block_id) || {};
+      const unit  = units.find(u => u.unit_id === a.unit_id) || {};
+      return {
+        unit_name:       unit.unit_name || '',
+        question_prompt: block.question_prompt || '',
+        answer_text:     a.answer_text,
+        updated_at:      a.updated_at
+      };
+    })
+    .sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
+
+  return { answers: enriched };
+}
+
+/**
+ * מחזירה למורה את יומן הצ'אטבוט המלא של קבוצה — כל השאלות והתשובות,
+ * לפי בקשת ניסן: "מה שהם מתכתבים עם הצאטבוט נשמר והמורה יוכל לגשת לזה".
+ */
+function getGroupChatLog({ verifiedEmail, group_id }) {
+  const ssKP  = SpreadsheetApp.openById(SHEETS.KITA_PLUS);
+  const roles = getRoles(ssKP, verifiedEmail);
+  const isTeacher = roles.some(r => ['teacher','admin','school_admin','homeroom'].includes(r));
+  if (!isTeacher) throw new Error('אין הרשאה לצפות ביומן הצ׳אט');
+
+  const ss   = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const logs = sheetToObjects(ensureChatLogsSheet(ss))
+    .filter(l => l.group_id == group_id)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  return { logs };
 }
 
 function saveSection({ verifiedEmail, group_id, section_num, content, device_id }) {
@@ -790,6 +1022,12 @@ function chatWithBot({ verifiedEmail, group_id, section_num, message }) {
 ענה בעברית, קצר וידידותי (2-4 משפטים).`;
 
   const reply = callGemini(systemPrompt, message);
+
+  const logSheet = ensureChatLogsSheet(ss);
+  const now = new Date().toISOString();
+  appendRow(logSheet, { log_id: Utilities.getUuid(), group_id, student_email: verifiedEmail, section_num, role: 'student', message, timestamp: now });
+  appendRow(logSheet, { log_id: Utilities.getUuid(), group_id, student_email: verifiedEmail, section_num, role: 'bot', message: reply, timestamp: now });
+
   return { reply };
 }
 
