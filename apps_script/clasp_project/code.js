@@ -59,7 +59,7 @@ function doPost(e) {
 
     const protectedActions = [
       'getMyProfile', 'getTeacherDashboard', 'getGroupData',
-      'saveSection', 'toggleUnit', 'getAdminData',
+      'saveSection', 'toggleUnit', 'addUnit', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
       'proposeSite', 'chatWithBot'
@@ -83,6 +83,8 @@ function doPost(e) {
       getGroupData:        () => getGroupData(body),
       saveSection:         () => saveSection(body),
       toggleUnit:          () => toggleUnit(body),
+      addUnit:             () => addUnit(body),
+      getGroupLessons:     () => getGroupLessons(body),
 
       addGroup:            () => addGroup(body),
       addMember:           () => addMember(body),
@@ -322,6 +324,41 @@ function getGroupData({ verifiedEmail, group_id }) {
   };
 }
 
+/**
+ * מחזירה לתלמיד את יחידות הלימוד הפתוחות של המורה של הקבוצה שלו.
+ * getTeacherDashboard מחזיר units רק כשקוראים לו כמורה (מסנן לפי teacher_email
+ * של הקורא עצמו) — תלמיד לא יכול לקבל דרכו את היחידות של המורה שלו. זו הפעולה
+ * המקבילה לתלמידים: מוצאת את הקבוצה → את teacher_email שלה → מחזירה רק
+ * יחידות פתוחות (is_open=TRUE) של אותו מורה, כולל תוכן.
+ */
+function getGroupLessons({ verifiedEmail, group_id }) {
+  const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const groups = sheetToObjects(ss.getSheetByName('groups'));
+  const group  = groups.find(g => g.group_id == group_id);
+  if (!group) throw new Error('קבוצה לא נמצאה');
+
+  const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+    throw new Error('אין הרשאה לצפות ביחידות של קבוצה זו');
+  }
+
+  const allUnits = sheetToObjects(ss.getSheetByName('units'));
+  const lessons = allUnits
+    .filter(u => u.teacher_email === group.teacher_email && (u.is_open === 'TRUE' || u.is_open === true))
+    .sort((a, b) => (Number(a.lesson_num) || 99) - (Number(b.lesson_num) || 99))
+    .map(u => ({
+      unit_id:            u.unit_id,
+      unit_name:           u.unit_name,
+      lesson_num:          u.lesson_num || '',
+      section_linked:      u.section_linked || '',
+      source_type:         u.source_type || '',
+      summary:             u.summary || '',
+      assignment_summary:  u.assignment_summary || ''
+    }));
+
+  return { lessons };
+}
+
 function saveSection({ verifiedEmail, group_id, section_num, content, device_id }) {
   const ss  = SpreadsheetApp.openById(SHEETS.TOURISM);
   const now = new Date().toISOString();
@@ -405,6 +442,33 @@ function toggleUnit({ verifiedEmail, unit_id, is_open }) {
     if (dateIdx > 0 && is_open) unitsSheet.getRange(rowNum, dateIdx).setValue(now);
 
     return { unit_id, is_open };
+  });
+}
+
+/**
+ * יוצרת יחידת לימוד מותאמת-אישית חדשה של המורה (לא אחת מ-9 היחידות הזרועות).
+ * הפרונט (teacher.html) קרא בעבר ל-toggleUnit עם unit_id חדש כדי "ליצור" —
+ * זה תמיד נכשל כי toggleUnit דורש שהיחידה כבר קיימת. זה התיקון האמיתי.
+ */
+function addUnit({ verifiedEmail, unit_name, section_linked, is_open }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+  const now = new Date().toISOString();
+
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('units');
+    const unit_id = 'unit_' + Date.now();
+
+    appendRow(sheet, {
+      unit_id,
+      teacher_email:  verifiedEmail,
+      unit_name,
+      section_linked,
+      is_open:   is_open ? 'TRUE' : 'FALSE',
+      open_date: is_open ? now : ''
+    });
+
+    return { unit_id, created: true };
   });
 }
 
