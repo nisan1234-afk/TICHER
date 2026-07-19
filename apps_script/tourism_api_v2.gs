@@ -64,7 +64,7 @@ function doPost(e) {
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
       'proposeSite', 'chatWithBot',
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
-      'getGroupLessonAnswers', 'saveTeacherSectionEdit'
+      'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup'
     ];
 
     if (protectedActions.includes(action)) {
@@ -105,6 +105,8 @@ function doPost(e) {
       getGroupChatLog:     () => getGroupChatLog(body),
       getGroupLessonAnswers: () => getGroupLessonAnswers(body),
       saveTeacherSectionEdit: () => saveTeacherSectionEdit(body),
+      sendBackupEmail:     () => sendBackupEmail(body),
+      restoreBackup:       () => restoreBackup(body),
     };
 
     if (!handlers[action]) {
@@ -412,6 +414,116 @@ function ensureProjectsTeacherColumns(sheet) {
   if (needed.length === 0) return;
   const startCol = sheet.getLastColumn() + 1;
   sheet.getRange(1, startCol, 1, needed.length).setValues([needed]);
+}
+
+/**
+ * שולחת למייל שהתלמיד ציין קובץ גיבוי (JSON) עם כל נתוני הקבוצה שלו —
+ * רשת ביטחון אישית מעבר לשמירה האוטומטית בגיליון, לפי בקשת ניסן.
+ */
+function sendBackupEmail({ verifiedEmail, group_id, to_email }) {
+  const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const groups = sheetToObjects(ss.getSheetByName('groups'));
+  const group  = groups.find(g => g.group_id == group_id);
+  if (!group) throw new Error('קבוצה לא נמצאה');
+
+  const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+    throw new Error('אין הרשאה לגבות קבוצה זו');
+  }
+  if (!to_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to_email)) {
+    throw new Error('כתובת מייל לא תקינה');
+  }
+
+  const projects = sheetToObjects(ss.getSheetByName('projects'));
+  const project  = projects.find(p => p.group_id == group_id || p.pair_id == group_id) || {};
+  const sections = {};
+  for (let i = 1; i <= 8; i++) sections['section_' + i] = project['section_' + i] || '';
+
+  const answers = sheetToObjects(ensureLessonAnswersSheet(ss))
+    .filter(a => a.group_id == group_id)
+    .map(a => ({ unit_id: a.unit_id, block_id: a.block_id, answer_text: a.answer_text }));
+
+  const backup = {
+    backup_version: 1,
+    exported_at: new Date().toISOString(),
+    group_id: group.group_id,
+    group_name: group.group_name || '',
+    site_name: group.site_name || '',
+    site_url: group.site_url || '',
+    members,
+    sections,
+    lesson_answers: answers
+  };
+
+  const jsonStr  = JSON.stringify(backup, null, 2);
+  const fileName = 'גיבוי_' + (group.group_name || group_id) + '.json';
+  const blob     = Utilities.newBlob(jsonStr, 'application/json', fileName);
+
+  MailApp.sendEmail({
+    to: to_email,
+    subject: 'גיבוי לפרויקט תיירות דיגיטלית — ' + (group.group_name || group_id),
+    body: 'מצורף קובץ גיבוי של כל המידע שהזנתם בפרויקט "כיתה פלוס".\n\nכדי לשחזר בעתיד: היכנסו למערכת, פתחו "💾 גיבוי ושחזור" בתפריט הצד, ובחרו את הקובץ המצורף.',
+    attachments: [blob]
+  });
+
+  return { sent: true, to: to_email };
+}
+
+/**
+ * משחזרת נתוני קבוצה מקובץ גיבוי (JSON) שהועלה — דורסת רק את 8 הסעיפים ופרטי
+ * האתר של הקבוצה הנוכחית, לא יוצרת/מזיזה קבוצות. אישור על הדריסה נעשה בצד
+ * הלקוח (confirm) לפני הקריאה הזו, כי זו פעולה שדורסת מידע קיים.
+ */
+function restoreBackup({ verifiedEmail, group_id, backup_json }) {
+  const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const groups = sheetToObjects(ss.getSheetByName('groups'));
+  const group  = groups.find(g => g.group_id == group_id);
+  if (!group) throw new Error('קבוצה לא נמצאה');
+
+  const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+    throw new Error('אין הרשאה לשחזר לקבוצה זו');
+  }
+
+  let backup;
+  try { backup = JSON.parse(backup_json); } catch (e) { throw new Error('קובץ הגיבוי פגום או לא בפורמט הנכון'); }
+  if (!backup || !backup.sections) throw new Error('קובץ הגיבוי לא מכיל נתוני פרויקט תקינים');
+
+  return withLock(() => {
+    const now = new Date().toISOString();
+    const projectsSheet = ss.getSheetByName('projects');
+    const projects       = sheetToObjects(projectsSheet);
+    const idx            = projects.findIndex(p => p.group_id == group_id || p.pair_id == group_id);
+
+    if (idx === -1) {
+      const newRow = { group_id };
+      for (let i = 1; i <= 8; i++) newRow['section_' + i] = backup.sections['section_' + i] || '';
+      newRow.last_updated = now;
+      appendRow(projectsSheet, newRow);
+    } else {
+      const headers = getHeaders(projectsSheet);
+      const rowNum  = idx + 2;
+      for (let i = 1; i <= 8; i++) {
+        const colIdx = headers.indexOf('section_' + i) + 1;
+        if (colIdx > 0) projectsSheet.getRange(rowNum, colIdx).setValue(backup.sections['section_' + i] || '');
+      }
+      const updIdx = headers.indexOf('last_updated') + 1;
+      if (updIdx > 0) projectsSheet.getRange(rowNum, updIdx).setValue(now);
+    }
+
+    if (backup.site_name || backup.site_url) {
+      const groupsSheet = ss.getSheetByName('groups');
+      const gIdx        = groups.findIndex(g => g.group_id == group_id);
+      const gHeaders    = getHeaders(groupsSheet);
+      const gRowNum     = gIdx + 2;
+      const nameIdx = gHeaders.indexOf('site_name') + 1;
+      const urlIdx  = gHeaders.indexOf('site_url') + 1;
+      if (nameIdx > 0 && backup.site_name) groupsSheet.getRange(gRowNum, nameIdx).setValue(backup.site_name);
+      if (urlIdx > 0 && backup.site_url)  groupsSheet.getRange(gRowNum, urlIdx).setValue(backup.site_url);
+    }
+
+    return { restored: true };
+  });
 }
 
 /**
