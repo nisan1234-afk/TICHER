@@ -63,7 +63,8 @@ function doPost(e) {
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
       'proposeSite', 'chatWithBot',
-      'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog'
+      'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
+      'getGroupLessonAnswers'
     ];
 
     if (protectedActions.includes(action)) {
@@ -102,6 +103,7 @@ function doPost(e) {
       updateLessonBlock:   () => updateLessonBlock(body),
       deleteLessonBlock:   () => deleteLessonBlock(body),
       getGroupChatLog:     () => getGroupChatLog(body),
+      getGroupLessonAnswers: () => getGroupLessonAnswers(body),
     };
 
     if (!handlers[action]) {
@@ -267,8 +269,27 @@ function getTeacherDashboard({ verifiedEmail }) {
   const allProjects = sheetToObjects(ss.getSheetByName('projects'));
   const allUnits    = sheetToObjects(ss.getSheetByName('units'));
   const allLogs     = sheetToObjects(ss.getSheetByName('activity_log'));
+  const allBlocks   = sheetToObjects(ensureLessonBlocksSheet(ss));
 
-  const units = allUnits.filter(u => u.teacher_email == verifiedEmail);
+  const units = allUnits
+    .filter(u => u.teacher_email == verifiedEmail)
+    .map(u => {
+      const blocks = allBlocks
+        .filter(b => b.unit_id === u.unit_id)
+        .sort((a, b) => (Number(a.block_order) || 99) - (Number(b.block_order) || 99))
+        .map(b => {
+          const block = {
+            block_id: b.block_id, block_order: b.block_order, block_type: b.block_type,
+            title: b.title || '', body: b.body || '',
+            media_type: b.media_type || '', media_url: b.media_url || '',
+            game_type: b.game_type || '', question_prompt: b.question_prompt || '',
+            target_field: b.target_field || ''
+          };
+          if (b.game_data) { try { block.game_data = JSON.parse(b.game_data); } catch (e) { block.game_data = []; } }
+          return block;
+        });
+      return Object.assign({}, u, { blocks });
+    });
   const myGroups = allGroups.filter(g => g.teacher_email == verifiedEmail);
 
   const groups = myGroups.map(group => {
@@ -542,6 +563,38 @@ function deleteLessonBlock({ verifiedEmail, block_id }) {
     sheet.deleteRow(idx + 2);
     return { deleted: true };
   });
+}
+
+/**
+ * מחזירה למורה את כל תשובות הקבוצה לשאלות האישיות מתוך יחידות הלימוד,
+ * עם הקשר (שם היחידה, נוסח השאלה) — כדי שהמורה יוכל לקרוא ולתת ציון/משוב.
+ */
+function getGroupLessonAnswers({ verifiedEmail, group_id }) {
+  const ssKP  = SpreadsheetApp.openById(SHEETS.KITA_PLUS);
+  const roles = getRoles(ssKP, verifiedEmail);
+  const isTeacher = roles.some(r => ['teacher','admin','school_admin','homeroom'].includes(r));
+  if (!isTeacher) throw new Error('אין הרשאה לצפות בתשובות הקבוצה');
+
+  const ss      = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const answers = sheetToObjects(ensureLessonAnswersSheet(ss)).filter(a => a.group_id == group_id);
+  const blocks  = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const units   = sheetToObjects(ss.getSheetByName('units'));
+
+  const enriched = answers
+    .filter(a => a.answer_text)
+    .map(a => {
+      const block = blocks.find(b => b.block_id === a.block_id) || {};
+      const unit  = units.find(u => u.unit_id === a.unit_id) || {};
+      return {
+        unit_name:       unit.unit_name || '',
+        question_prompt: block.question_prompt || '',
+        answer_text:     a.answer_text,
+        updated_at:      a.updated_at
+      };
+    })
+    .sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at));
+
+  return { answers: enriched };
 }
 
 /**

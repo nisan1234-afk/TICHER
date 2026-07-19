@@ -269,8 +269,27 @@ function getTeacherDashboard({ verifiedEmail }) {
   const allProjects = sheetToObjects(ss.getSheetByName('projects'));
   const allUnits    = sheetToObjects(ss.getSheetByName('units'));
   const allLogs     = sheetToObjects(ss.getSheetByName('activity_log'));
+  const allBlocks   = sheetToObjects(ensureLessonBlocksSheet(ss));
 
-  const units = allUnits.filter(u => u.teacher_email == verifiedEmail);
+  const units = allUnits
+    .filter(u => u.teacher_email == verifiedEmail)
+    .map(u => {
+      const blocks = allBlocks
+        .filter(b => b.unit_id === u.unit_id)
+        .sort((a, b) => (Number(a.block_order) || 99) - (Number(b.block_order) || 99))
+        .map(b => {
+          const block = {
+            block_id: b.block_id, block_order: b.block_order, block_type: b.block_type,
+            title: b.title || '', body: b.body || '',
+            media_type: b.media_type || '', media_url: b.media_url || '',
+            game_type: b.game_type || '', question_prompt: b.question_prompt || '',
+            target_field: b.target_field || ''
+          };
+          if (b.game_data) { try { block.game_data = JSON.parse(b.game_data); } catch (e) { block.game_data = []; } }
+          return block;
+        });
+      return Object.assign({}, u, { blocks });
+    });
   const myGroups = allGroups.filter(g => g.teacher_email == verifiedEmail);
 
   const groups = myGroups.map(group => {
