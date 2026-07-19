@@ -64,7 +64,7 @@ function doPost(e) {
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
       'proposeSite', 'chatWithBot',
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
-      'getGroupLessonAnswers'
+      'getGroupLessonAnswers', 'saveTeacherSectionEdit'
     ];
 
     if (protectedActions.includes(action)) {
@@ -104,6 +104,7 @@ function doPost(e) {
       deleteLessonBlock:   () => deleteLessonBlock(body),
       getGroupChatLog:     () => getGroupChatLog(body),
       getGroupLessonAnswers: () => getGroupLessonAnswers(body),
+      saveTeacherSectionEdit: () => saveTeacherSectionEdit(body),
     };
 
     if (!handlers[action]) {
@@ -340,17 +341,77 @@ function getGroupData({ verifiedEmail, group_id }) {
   const project   = projects.find(p => p.group_id == group_id || p.pair_id == group_id) || {};
   const groupLogs = logs.filter(l => l.group_id == group_id || l.pair_id == group_id);
 
-  const sections = {};
+  const sections     = {};
+  const teacherEdits = {};
+  const comments     = {};
   for (let i = 1; i <= 8; i++) {
     sections['section_' + i] = project['section_' + i] || '';
+    try { teacherEdits['section_' + i] = project['section_' + i + '_teacher'] ? JSON.parse(project['section_' + i + '_teacher']) : {}; }
+    catch (e) { teacherEdits['section_' + i] = {}; }
+    comments['section_' + i] = project['section_' + i + '_comment'] || '';
   }
 
   return {
     group: { ...group, members },
     sections,
+    teacherEdits,
+    comments,
     contribution:  calcContribution(groupLogs, members),
     last_updated:  project.last_updated
   };
+}
+
+/**
+ * שומרת עריכה/הערה של המורה על סעיף ספציפי בקבוצה — ללא דריסת הטקסט המקורי
+ * של התלמיד. עריכת המורה נשמרת בנפרד (section_N_teacher) ומוצגת לתלמיד
+ * כבלוק צבוע נפרד מתחת לכל שדה, לצד הערת מורה כללית לסעיף (section_N_comment).
+ * לפי בקשת ניסן: "המורה צריך גישה ישיר למה שהתלמידים כתבו- עם יכולת עריכה
+ * (מה שהמורה עורך יופיע בצבע אחר) ועם הערות שלו מתחת לכל סעיף".
+ */
+function saveTeacherSectionEdit({ verifiedEmail, group_id, section_num, teacher_fields, comment }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+
+  return withLock(() => {
+    const ss = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('projects');
+    ensureProjectsTeacherColumns(sheet);
+
+    const projects = sheetToObjects(sheet);
+    const idx = projects.findIndex(p => p.group_id == group_id || p.pair_id == group_id);
+    const teacherCol  = 'section_' + section_num + '_teacher';
+    const commentCol  = 'section_' + section_num + '_comment';
+
+    if (idx === -1) {
+      const newRow = { group_id };
+      for (let i = 1; i <= 8; i++) newRow['section_' + i] = '';
+      newRow[teacherCol] = JSON.stringify(teacher_fields || {});
+      newRow[commentCol] = comment || '';
+      appendRow(sheet, newRow);
+    } else {
+      const headers = getHeaders(sheet);
+      const rowNum  = idx + 2;
+      const tIdx = headers.indexOf(teacherCol) + 1;
+      const cIdx = headers.indexOf(commentCol) + 1;
+      if (tIdx > 0) sheet.getRange(rowNum, tIdx).setValue(JSON.stringify(teacher_fields || {}));
+      if (cIdx > 0) sheet.getRange(rowNum, cIdx).setValue(comment || '');
+    }
+
+    return { saved: true };
+  });
+}
+
+/** מוסיפה עמודות section_N_teacher/section_N_comment לטאב projects אם עוד לא קיימות. */
+function ensureProjectsTeacherColumns(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  const headers = headerRange.getValues()[0];
+  const needed = [];
+  for (let i = 1; i <= 8; i++) {
+    if (headers.indexOf('section_' + i + '_teacher') === -1) needed.push('section_' + i + '_teacher');
+    if (headers.indexOf('section_' + i + '_comment') === -1) needed.push('section_' + i + '_comment');
+  }
+  if (needed.length === 0) return;
+  const startCol = sheet.getLastColumn() + 1;
+  sheet.getRange(1, startCol, 1, needed.length).setValues([needed]);
 }
 
 /**
