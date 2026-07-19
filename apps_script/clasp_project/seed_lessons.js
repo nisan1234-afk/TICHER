@@ -98,11 +98,13 @@ function seedCurriculumLessons() {
   const sheet = ss.getSheetByName('units');
   if (!sheet) throw new Error('לא נמצא טאב units');
 
+  fixTeacherPhoneHeader(sheet);
   ensureUnitsContentColumns(sheet);
+  backfillMissingTeacherEmail(sheet);
 
   const existing = sheetToObjects(sheet);
   const existingLessonNums = existing
-    .filter(u => u.teacher_email === LESSONS_TEACHER_EMAIL && u.lesson_num)
+    .filter(u => u.lesson_num)
     .map(u => Number(u.lesson_num));
 
   const headers = getHeaders(sheet);
@@ -129,6 +131,50 @@ function seedCurriculumLessons() {
   });
 
   Logger.log('נזרעו ' + added + ' יחידות לימוד חדשות (מתוך 9). קיימות מראש: ' + (9 - added) + '.');
+}
+
+/**
+ * מתקן שם עמודה ישן: teacher_phone → teacher_email. הטאב units נוצר לפני
+ * המעבר למייל כמזהה יחיד (Google Sign-In) ונשאר עם השם הישן, כך שכל הקוד
+ * (toggleUnit, addUnit, getGroupLessons) שמחפש teacher_email לא מוצא כלום.
+ * לא נוגע בנתונים — רק בכותרת. בטוח להרצה חוזרת (לא עושה כלום אם כבר תוקן).
+ */
+function fixTeacherPhoneHeader(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  const headers = headerRange.getValues()[0];
+  const idx = headers.indexOf('teacher_phone');
+
+  if (idx === -1) {
+    Logger.log(headers.indexOf('teacher_email') !== -1
+      ? 'עמודת teacher_email כבר קיימת.'
+      : 'לא נמצאה לא teacher_phone ולא teacher_email — יש לבדוק ידנית.');
+    return;
+  }
+
+  sheet.getRange(1, idx + 1).setValue('teacher_email');
+  Logger.log('הכותרת בעמודה ' + (idx + 1) + ' שונתה מ-teacher_phone ל-teacher_email.');
+}
+
+/**
+ * שורות ה-lesson_* שכבר נכתבו לפני התיקון של fixTeacherPhoneHeader נשארו עם
+ * עמודת teacher_email ריקה (כי בזמן הכתיבה שלהן העמודה עוד לא הייתה קיימת
+ * בכלל, אז appendRow לא הייתה לה לאן לשים את הערך). ממלא את הערך בדיעבד,
+ * רק לשורות עם lesson_num שהעמודה ריקה אצלן.
+ */
+function backfillMissingTeacherEmail(sheet) {
+  const data    = sheetToObjects(sheet);
+  const headers = getHeaders(sheet);
+  const emailIdx = headers.indexOf('teacher_email') + 1;
+  if (emailIdx === 0) return;
+
+  let fixed = 0;
+  data.forEach((row, i) => {
+    if (row.lesson_num && !row.teacher_email) {
+      sheet.getRange(i + 2, emailIdx).setValue(LESSONS_TEACHER_EMAIL);
+      fixed++;
+    }
+  });
+  if (fixed > 0) Logger.log('מולא teacher_email רטרואקטיבית ל-' + fixed + ' שורות.');
 }
 
 /**
