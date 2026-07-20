@@ -572,7 +572,10 @@ function getGroupLessons({ verifiedEmail, group_id }) {
             media_url:       b.media_url || '',
             game_type:       b.game_type || '',
             question_prompt: b.question_prompt || '',
-            target_field:    b.target_field || ''
+            target_field:    b.target_field || '',
+            answer_scope:    b.answer_scope || 'learning',
+            project_section: b.project_section || '',
+            is_exportable:   b.is_exportable === true || b.is_exportable === 'TRUE' || b.is_exportable === 'true'
           };
           if ((b.block_type === 'game' || b.block_type === 'quiz') && b.game_data) {
             try { block.game_data = JSON.parse(b.game_data); } catch (e) { block.game_data = []; }
@@ -691,10 +694,25 @@ function ensureLessonAnswersScoreColumns(sheet) {
  * יחידת לימוד (הוראה/משחק/שאלה אישית). לא נוגעת בטאב units עצמו.
  */
 function ensureLessonBlocksSheet(ss) {
-  return ensureSheetWithHeaders(ss, 'lesson_blocks', [
+  const sheet = ensureSheetWithHeaders(ss, 'lesson_blocks', [
     'block_id', 'unit_id', 'block_order', 'block_type', 'title', 'body',
     'media_type', 'media_url', 'game_type', 'game_data', 'question_prompt', 'target_field'
   ]);
+  return ensureLessonBlockScopeColumns(sheet);
+}
+
+/**
+ * הוספה חד-פעמית (self-healing) של עמודות ההפרדה בין תשובת-למידה לתשובת-תוצר:
+ * answer_scope (learning/project), project_section (1-8, רק אם project),
+ * is_exportable. לא נוגעת בשורות קיימות מלבד הוספת עמודות ריקות.
+ */
+function ensureLessonBlockScopeColumns(sheet) {
+  const headers = getHeaders(sheet);
+  const toAdd = ['answer_scope', 'project_section', 'is_exportable'].filter(h => headers.indexOf(h) === -1);
+  if (toAdd.length) {
+    sheet.getRange(1, headers.length + 1, 1, toAdd.length).setValues([toAdd]);
+  }
+  return sheet;
 }
 
 /** טאב lesson_answers — תשובות קבוצות לשאלות האישיות שבתוך בלוקים. */
@@ -723,7 +741,7 @@ function ensureSheetWithHeaders(ss, name, headers) {
 /**
  * CRUD לבלוקים בתוך יחידת לימוד — למורה, לעריכה ידנית אחרי הבנייה הראשונית.
  */
-function addLessonBlock({ verifiedEmail, unit_id, block_order, block_type, title, body, media_type, media_url, game_type, game_data, question_prompt, target_field }) {
+function addLessonBlock({ verifiedEmail, unit_id, block_order, block_type, title, body, media_type, media_url, game_type, game_data, question_prompt, target_field, answer_scope, project_section, is_exportable }) {
   requireRole(verifiedEmail, ['teacher','admin','school_admin']);
   return withLock(() => {
     const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
@@ -737,13 +755,16 @@ function addLessonBlock({ verifiedEmail, unit_id, block_order, block_type, title
       game_type: game_type || '',
       game_data: game_data ? JSON.stringify(game_data) : '',
       question_prompt: question_prompt || '',
-      target_field: target_field || ''
+      target_field: target_field || '',
+      answer_scope: answer_scope || 'learning',
+      project_section: project_section || '',
+      is_exportable: is_exportable === undefined ? (answer_scope === 'project') : !!is_exportable
     });
     return { block_id, created: true };
   });
 }
 
-function updateLessonBlock({ verifiedEmail, block_id, block_order, title, body, media_type, media_url, game_type, game_data, question_prompt, target_field }) {
+function updateLessonBlock({ verifiedEmail, block_id, block_order, title, body, media_type, media_url, game_type, game_data, question_prompt, target_field, answer_scope, project_section, is_exportable }) {
   requireRole(verifiedEmail, ['teacher','admin','school_admin']);
   return withLock(() => {
     const ss      = SpreadsheetApp.openById(SHEETS.TOURISM);
@@ -754,7 +775,7 @@ function updateLessonBlock({ verifiedEmail, block_id, block_order, title, body, 
 
     const headers = getHeaders(sheet);
     const rowNum  = idx + 2;
-    const fields  = { block_order, title, body, media_type, media_url, game_type, question_prompt, target_field };
+    const fields  = { block_order, title, body, media_type, media_url, game_type, question_prompt, target_field, answer_scope, project_section, is_exportable };
     if (game_data !== undefined) fields.game_data = JSON.stringify(game_data);
 
     Object.keys(fields).forEach(key => {
