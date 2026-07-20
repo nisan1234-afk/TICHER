@@ -56,6 +56,17 @@
     .user-name { font-family: var(--font-display); font-size: 14px; font-weight: 700; }
     .user-email { font-size: 12px; color: var(--muted); margin-top: 2px; }
     .pending-info { background: rgba(242,153,74,0.1); border: 1px solid rgba(242,153,74,0.3); color: var(--warning); border-radius: 11px; padding: 14px 16px; font-size: 13px; line-height: 1.6; }
+
+    /* מיקרו-אינטראקציות: פידבק מיידי בלחיצה */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+      }
+    }
+    .btn, .btn-ghost { transition: transform 0.15s cubic-bezier(.34,1.2,.64,1), filter 0.15s ease; }
+    .btn:active, .btn-ghost:active { transform: scale(0.97); }
+    input { transition: transform 0.1s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
   </style>
 </head>
 <body>
