@@ -64,7 +64,8 @@ function doPost(e) {
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
       'proposeSite', 'chatWithBot',
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
-      'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup'
+      'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup',
+      'getFindingsForTeacher', 'updateFindingStatus'
     ];
 
     if (protectedActions.includes(action)) {
@@ -107,6 +108,9 @@ function doPost(e) {
       saveTeacherSectionEdit: () => saveTeacherSectionEdit(body),
       sendBackupEmail:     () => sendBackupEmail(body),
       restoreBackup:       () => restoreBackup(body),
+
+      getFindingsForTeacher: () => getFindingsForTeacher(body),
+      updateFindingStatus:   () => updateFindingStatus(body),
     };
 
     if (!handlers[action]) {
@@ -675,7 +679,110 @@ function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_t
       });
     }
 
+    upsertFinding_(ss, { group_id, unit_id, block_id, answer_text: answer_text || '', now });
+
     return { saved: true, updated_at: now, score, score_feedback: scoreFeedback };
+  });
+}
+
+/**
+ * אם הבלוק הוא תשובת-תוצר (answer_scope=project), יוצרת/מעדכנת שורה מתאימה
+ * ב-findings — סטטוס תמיד חוזר ל-pending בכל שמירה חוזרת, כדי שהמורה יידע
+ * שיש עדכון שממתין לבדיקה. תשובת למידה לא יוצרת ממצא בכלל.
+ */
+function upsertFinding_(ss, { group_id, unit_id, block_id, answer_text, now }) {
+  const blocks = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const block  = blocks.find(b => b.block_id === block_id);
+  if (!block || block.answer_scope !== 'project') return;
+
+  const sheet    = ensureFindingsSheet(ss);
+  const findings = sheetToObjects(sheet);
+  const idx      = findings.findIndex(f => f.group_id == group_id && f.block_id === block_id);
+
+  if (!answer_text.trim()) return; // אין ממצא ריק
+
+  if (idx === -1) {
+    appendRow(sheet, {
+      finding_id: Utilities.getUuid(),
+      group_id, unit_id, block_id,
+      project_section: block.project_section || '',
+      content: answer_text,
+      status: 'pending',
+      teacher_note: '',
+      updated_at: now
+    });
+  } else {
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    const fields  = { content: answer_text, status: 'pending', updated_at: now };
+    Object.keys(fields).forEach(key => {
+      const colIdx = headers.indexOf(key) + 1;
+      if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
+    });
+  }
+}
+
+/** כל הממצאים (תשובות-תוצר) של קבוצות המורה המחובר, לתצוגה לפי פרק. */
+function getFindingsForTeacher({ verifiedEmail }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  const ss = SpreadsheetApp.openById(SHEETS.TOURISM);
+
+  const myGroups   = sheetToObjects(ss.getSheetByName('groups')).filter(g => g.teacher_email == verifiedEmail);
+  const myGroupIds = new Set(myGroups.map(g => String(g.group_id)));
+  const allBlocks  = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const allUnits   = sheetToObjects(ss.getSheetByName('units'));
+
+  const findings = sheetToObjects(ensureFindingsSheet(ss))
+    .filter(f => myGroupIds.has(String(f.group_id)))
+    .map(f => {
+      const group = myGroups.find(g => String(g.group_id) === String(f.group_id));
+      const block = allBlocks.find(b => b.block_id === f.block_id);
+      const unit  = allUnits.find(u => u.unit_id === f.unit_id);
+      return {
+        finding_id:      f.finding_id,
+        group_id:        f.group_id,
+        group_name:      group ? (group.group_name || group.group_id) : f.group_id,
+        unit_id:         f.unit_id,
+        unit_name:       unit ? unit.unit_name : f.unit_id,
+        block_id:        f.block_id,
+        block_title:     block ? block.title : '',
+        project_section: f.project_section || '',
+        content:         f.content || '',
+        status:          f.status || 'pending',
+        teacher_note:    f.teacher_note || '',
+        updated_at:      f.updated_at || ''
+      };
+    })
+    .sort((a, b) => (Number(a.project_section) || 99) - (Number(b.project_section) || 99));
+
+  return { findings };
+}
+
+/** אישור / החזרה לתיקון של ממצא בודד ע"י המורה. */
+function updateFindingStatus({ verifiedEmail, finding_id, status, teacher_note }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  if (['pending', 'approved', 'returned'].indexOf(status) === -1) throw new Error('סטטוס לא תקין');
+
+  return withLock(() => {
+    const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet  = ensureFindingsSheet(ss);
+    const rows   = sheetToObjects(sheet);
+    const idx    = rows.findIndex(f => f.finding_id === finding_id);
+    if (idx === -1) throw new Error('ממצא לא נמצא');
+
+    const group = sheetToObjects(ss.getSheetByName('groups')).find(g => g.group_id == rows[idx].group_id);
+    if (!group || group.teacher_email != verifiedEmail) {
+      requireRole(verifiedEmail, ['admin', 'school_admin']); // מורה יכול לגעת רק בממצאים של הקבוצות שלו; אדמין יכול תמיד
+    }
+
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    const fields  = { status, teacher_note: teacher_note || '', updated_at: new Date().toISOString() };
+    Object.keys(fields).forEach(key => {
+      const colIdx = headers.indexOf(key) + 1;
+      if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
+    });
+    return { updated: true };
   });
 }
 
@@ -726,6 +833,19 @@ function ensureLessonAnswersSheet(ss) {
 function ensureChatLogsSheet(ss) {
   return ensureSheetWithHeaders(ss, 'chat_logs', [
     'log_id', 'group_id', 'student_email', 'section_num', 'role', 'message', 'timestamp'
+  ]);
+}
+
+/**
+ * טאב findings — ממצאים (תשובות-תוצר בלבד) שממתינים לאישור המורה לפני
+ * שהם נכנסים בפועל לסעיפי התוצר. שורה אחת לכל (group_id, block_id).
+ * status: pending / approved / returned. נוצרת/מתעדכנת מתוך saveLessonAnswer,
+ * לא נכתבת ישירות ע"י התלמיד.
+ */
+function ensureFindingsSheet(ss) {
+  return ensureSheetWithHeaders(ss, 'findings', [
+    'finding_id', 'group_id', 'unit_id', 'block_id', 'project_section',
+    'content', 'status', 'teacher_note', 'updated_at'
   ]);
 }
 
