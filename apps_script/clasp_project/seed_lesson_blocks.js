@@ -131,10 +131,18 @@ const LESSON_BLOCKS_SEED_DATA = {
       }
     },
     {
-      block_type: 'question',
+      block_type: 'quiz',
       title: 'מתרגלים',
-      question_prompt: 'עברו על שלושת הכרטיסים: "מה המשתמש צריך?", "איזה כלי מסייע לו?" ו"מה עלול להשתבש?". כתבו תשובה קצרה בכל כרטיס.',
-      answer_scope: 'learning'
+      question_prompt: 'מיינו כל פעולה: מתי במסע התייר היא קורית?',
+      answer_scope: 'learning',
+      game_data: {
+        mode: 'classify',
+        categories: ['לפני היציאה מהבית', 'בזמן הביקור', 'אחרי הביקור'],
+        items: ['בודקים שעות פתיחה ומחיר כניסה', 'צופים בתמונות וסרטונים של המקום', 'קוראים ביקורות של מבקרים קודמים', 'מצלמים ומשתפים ברשתות בזמן הביקור', 'כותבים ביקורת על החוויה', 'משתמשים בניווט כדי להגיע למקום'],
+        correctMap: [0, 0, 0, 1, 2, 1],
+        feedbackCorrect: 'נכון! כל פעולה דיגיטלית שייכת לשלב אחר במסע — עוד לפני שיוצאים מהבית, החוויה כבר מתחילה.',
+        feedbackIncorrect: 'כמעט. שאלו את עצמכם: זה קורה כשמתכננים בבית, כשנמצאים בפועל במקום, או אחרי שחוזרים?'
+      }
     },
     {
       block_type: 'question_structured',
@@ -143,7 +151,11 @@ const LESSON_BLOCKS_SEED_DATA = {
       answer_scope: 'project',
       project_section: '1',
       target_field: 'site_basic',
-      game_data: STRUCTURED_SITE_CHECK_TEMPLATE()
+      game_data: (function () {
+        const t = STRUCTURED_SITE_CHECK_TEMPLATE();
+        t.categories = ['אטרקציה טבעית', 'אתר היסטורי או תרבותי', 'יעד עירוני', 'אירוע תיירותי', 'מתחם בילוי או פנאי'];
+        return t;
+      })()
     },
     {
       block_type: 'question',
@@ -174,10 +186,18 @@ const LESSON_BLOCKS_SEED_DATA = {
       }
     },
     {
-      block_type: 'question',
+      block_type: 'quiz',
       title: 'מתרגלים',
-      question_prompt: 'גררו כל כרטיס לקטגוריה המתאימה. לאחר המיון בחרו כרטיס אחד והסבירו במשפט מדוע מיקמתם אותו שם.',
-      answer_scope: 'learning'
+      question_prompt: 'מיינו כל דוגמה: טבעית / מעשה ידי אדם / אירוע / לא בהכרח אטרקציה.',
+      answer_scope: 'learning',
+      game_data: {
+        mode: 'classify',
+        categories: ['טבעית', 'מעשה ידי אדם', 'אירוע', 'לא בהכרח אטרקציה'],
+        items: ['חרמון', 'מוזיאון', 'פסטיבל מוזיקה שנתי', 'מרכז קניות מקומי', 'נחל', 'משחק כדורגל בינלאומי'],
+        correctMap: [0, 1, 2, 3, 0, 2],
+        feedbackCorrect: 'נכון! זיהיתם את סוג האטרקציה נכון.',
+        feedbackIncorrect: 'כמעט. שאלו את עצמכם: זה קיים בטבע, נבנה בידי אדם, או שזה אירוע שקורה רק לזמן מסוים?'
+      }
     },
     {
       block_type: 'question_structured',
@@ -186,7 +206,11 @@ const LESSON_BLOCKS_SEED_DATA = {
       answer_scope: 'project',
       project_section: '1',
       target_field: 'site_unique',
-      game_data: STRUCTURED_SITE_CHECK_TEMPLATE()
+      game_data: (function () {
+        const t = STRUCTURED_SITE_CHECK_TEMPLATE();
+        t.categories = ['טבעי', 'מעשה ידי אדם', 'אירוע'];
+        return t;
+      })()
     },
     {
       block_type: 'question',
@@ -217,10 +241,18 @@ const LESSON_BLOCKS_SEED_DATA = {
       }
     },
     {
-      block_type: 'question',
+      block_type: 'quiz',
       title: 'מתרגלים',
-      question_prompt: 'גררו כל כרטיס לקטגוריה המתאימה. לאחר המיון בחרו כרטיס אחד והסבירו במשפט מדוע מיקמתם אותו שם.',
-      answer_scope: 'learning'
+      question_prompt: 'מיינו כל דוגמה לאחת מחמש הקטגוריות של תיירות דיגיטלית.',
+      answer_scope: 'learning',
+      game_data: {
+        mode: 'classify',
+        categories: ['הזמנות מקוונות', 'תיירות וירטואלית', 'אתרי מידע וביקורת', 'שיווק ברשתות החברתיות', 'אפליקציות סיוע לנוסע'],
+        items: ['Booking.com — הזמנת חדר במלון', 'סיור וירטואלי של 360 מעלות במוזיאון', 'דירוג וביקורות באתר Tripadvisor', 'סרטון באינסטגרם שמציג יעד תיירותי', 'Moovit — תכנון נסיעה בתחבורה ציבורית'],
+        correctMap: [0, 1, 2, 3, 4],
+        feedbackCorrect: 'נכון! כל כלי משתייך לקטגוריה שמתאימה לתפקיד שלו במסע התייר.',
+        feedbackIncorrect: 'כמעט. חשבו: התייר מזמין, מתרשם מרחוק, בודק מידע, מקבל השראה, או מסתדר בדרך?'
+      }
     },
     {
       block_type: 'question_structured',
@@ -264,10 +296,17 @@ const LESSON_BLOCKS_SEED_DATA = {
       }
     },
     {
-      block_type: 'question',
+      block_type: 'quiz',
       title: 'מתרגלים',
-      question_prompt: 'קראו את התרחיש, סמנו את הבעיה או העיקרון המרכזי, ובחרו את הפעולה המתאימה ביותר. לאחר מכן כתבו נימוק של משפט אחד.',
-      answer_scope: 'learning'
+      question_prompt: 'תרחיש: מצאתם ביקורת יחידה משנת 2019 שמשבחת מלון בלי שום פירוט, ואין אף ביקורת עדכנית יותר. מה נכון לעשות?',
+      answer_scope: 'learning',
+      game_data: {
+        mode: 'select',
+        options: ['לסמוך על הביקורת כי היא חיובית', 'לחפש ביקורות נוספות ועדכניות יותר לפני שמחליטים', 'להזמין בכל מקרה בלי לבדוק עוד', 'לפסול את המלון רק כי אין הרבה ביקורות'],
+        correct: [1],
+        feedbackCorrect: 'נכון! ביקורת בודדת וישנה לא מספיקה כדי לסמוך על מקום — צריך כמה ביקורות עדכניות ממקורות שונים לפני שמחליטים.',
+        feedbackIncorrect: 'עדיין לא. חשבו: כמה אפשר לסמוך על ביקורת אחת בת חמש שנים, בלי שום אימות נוסף?'
+      }
     },
     {
       block_type: 'question_structured',
@@ -276,7 +315,11 @@ const LESSON_BLOCKS_SEED_DATA = {
       answer_scope: 'project',
       project_section: '3',
       target_field: 'digital_reviews',
-      game_data: STRUCTURED_SITE_CHECK_TEMPLATE()
+      game_data: (function () {
+        const t = STRUCTURED_SITE_CHECK_TEMPLATE();
+        t.categories = ['דירוג גבוה (4 ומעלה)', 'דירוג בינוני (2.5–4)', 'דירוג נמוך (מתחת ל-2.5)'];
+        return t;
+      })()
     },
     {
       block_type: 'question',
@@ -649,4 +692,44 @@ function replaceLesson1BlocksV2() {
     });
   });
   Logger.log('יחידה 1 עודכנה לגרסת החוברת המפורטת: ' + blocks.length + ' בלוקים חדשים.');
+}
+
+/**
+ * מיגרציה חד-פעמית שלישית: משדרגת את בלוקי "מתרגלים" (המיון/התרחיש בכל מפגש)
+ * ממשחקי טקסט חופשי גנרי למשחקי מיון/בחירה אמיתיים עם תוכן קונקרטי, ומשלימה
+ * רשימות קטגוריות אמיתיות בבלוקי "בודקים באתר שלנו" שהיו ריקות — במקום להשאיר
+ * את הפערים שהבוט הכותב לא מילא. פועלת בלי בדיקת דילוג: תמיד מוחקת ומחדשת
+ * את כל בלוקי יחידה 1 מ-LESSON_BLOCKS_SEED_DATA.lesson_1 העדכני.
+ */
+function replaceLesson1BlocksV3() {
+  const ss      = SpreadsheetApp.openById(TOURISM_SHEET_ID);
+  const sheet   = ensureLessonBlocksSheet(ss);
+  const data    = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const unitIdCol = headers.indexOf('unit_id');
+
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][unitIdCol] === 'lesson_1') sheet.deleteRow(i + 1);
+  }
+
+  const blocks = LESSON_BLOCKS_SEED_DATA.lesson_1;
+  blocks.forEach((block, i) => {
+    const answerScope = block.answer_scope || 'learning';
+    appendRow(sheet, {
+      block_id: 'lesson_1_block_' + (i + 1),
+      unit_id: 'lesson_1',
+      block_order: i + 1,
+      block_type: block.block_type,
+      title: block.title || '', body: block.body || '',
+      media_type: block.media_type || '', media_url: block.media_url || '',
+      game_type: block.game_type || '',
+      game_data: block.game_data ? JSON.stringify(block.game_data) : '',
+      question_prompt: block.question_prompt || '',
+      target_field: block.target_field || '',
+      answer_scope: answerScope,
+      project_section: block.project_section || '',
+      is_exportable: answerScope === 'project'
+    });
+  });
+  Logger.log('יחידה 1 שודרגה (V3): ' + blocks.length + ' בלוקים, כולל משחקי מיון/בחירה אמיתיים.');
 }
