@@ -588,7 +588,7 @@ function getGroupLessons({ verifiedEmail, group_id }) {
             project_section: b.project_section || '',
             is_exportable:   b.is_exportable === true || b.is_exportable === 'TRUE' || b.is_exportable === 'true'
           };
-          if ((b.block_type === 'game' || b.block_type === 'quiz') && b.game_data) {
+          if ((b.block_type === 'game' || b.block_type === 'quiz' || b.block_type === 'question_structured') && b.game_data) {
             try { block.game_data = JSON.parse(b.game_data); } catch (e) { block.game_data = []; }
           }
           if (b.block_type === 'question' || b.block_type === 'question_structured') {
