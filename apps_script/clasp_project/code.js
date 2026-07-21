@@ -65,7 +65,8 @@ function doPost(e) {
       'proposeSite', 'chatWithBot',
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
       'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup',
-      'getFindingsForTeacher', 'updateFindingStatus'
+      'getFindingsForTeacher', 'updateFindingStatus',
+      'addClass', 'updateClass', 'deleteClass'
     ];
 
     if (protectedActions.includes(action)) {
@@ -111,6 +112,10 @@ function doPost(e) {
 
       getFindingsForTeacher: () => getFindingsForTeacher(body),
       updateFindingStatus:   () => updateFindingStatus(body),
+
+      addClass:    () => addClass(body),
+      updateClass: () => updateClass(body),
+      deleteClass: () => deleteClass(body),
     };
 
     if (!handlers[action]) {
@@ -323,7 +328,9 @@ function getTeacherDashboard({ verifiedEmail }) {
     };
   });
 
-  return { groups, units };
+  const classes = sheetToObjects(ensureClassesSheet(ss)).filter(c => c.teacher_email == verifiedEmail);
+
+  return { groups, units, classes };
 }
 
 function getGroupData({ verifiedEmail, group_id }) {
@@ -1136,6 +1143,62 @@ function ensureUnitPlannedMonthColumn(sheet) {
   const headers = headerRange.getValues()[0];
   if (headers.indexOf('planned_month') !== -1) return;
   sheet.getRange(1, sheet.getLastColumn() + 1).setValue('planned_month');
+}
+
+/** טאב classes — כיתות של המורה, שכבה בין בית הספר לקבוצות (בית ספר ← כיתה ← קבוצה ← תלמיד). */
+function ensureClassesSheet(ss) {
+  return ensureSheetWithHeaders(ss, 'classes', ['class_id', 'class_name', 'teacher_email', 'created_at']);
+}
+
+function addClass({ verifiedEmail, class_name }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  if (!class_name || !class_name.trim()) throw new Error('נא להזין שם כיתה');
+  const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const sheet = ensureClassesSheet(ss);
+  const class_id = 'class_' + Date.now();
+  appendRow(sheet, { class_id, class_name: class_name.trim(), teacher_email: verifiedEmail, created_at: new Date().toISOString() });
+  return { class_id, created: true };
+}
+
+function updateClass({ verifiedEmail, class_id, class_name }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  return withLock(() => {
+    const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet  = ensureClassesSheet(ss);
+    const rows   = sheetToObjects(sheet);
+    const idx    = rows.findIndex(c => c.class_id === class_id && c.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('כיתה לא נמצאה');
+    const headers = getHeaders(sheet);
+    const colIdx  = headers.indexOf('class_name') + 1;
+    if (colIdx > 0) sheet.getRange(idx + 2, colIdx).setValue((class_name || '').trim());
+    return { updated: true };
+  });
+}
+
+/** מוחקת כיתה; קבוצות ששייכות אליה לא נמחקות, רק משוחררות (class_id מתאפס). */
+function deleteClass({ verifiedEmail, class_id }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  return withLock(() => {
+    const ss = SpreadsheetApp.openById(SHEETS.TOURISM);
+
+    const classesSheet = ensureClassesSheet(ss);
+    const classes = sheetToObjects(classesSheet);
+    const idx = classes.findIndex(c => c.class_id === class_id && c.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('כיתה לא נמצאה');
+    classesSheet.deleteRow(idx + 2);
+
+    const groupsSheet = ss.getSheetByName('groups');
+    const groups = sheetToObjects(groupsSheet);
+    const headers = getHeaders(groupsSheet);
+    const classColIdx = headers.indexOf('class_id') + 1;
+    if (classColIdx > 0) {
+      groups.forEach((g, i) => {
+        if (g.class_id === class_id) groupsSheet.getRange(i + 2, classColIdx).setValue('');
+      });
+    }
+
+    return { deleted: true };
+  });
 }
 
 function addGroup({ verifiedEmail, class_id, group_name, members }) {
