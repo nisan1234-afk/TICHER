@@ -66,7 +66,8 @@ function doPost(e) {
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
       'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup',
       'getFindingsForTeacher', 'updateFindingStatus',
-      'addClass', 'updateClass', 'deleteClass'
+      'addClass', 'updateClass', 'deleteClass',
+      'trackUnitPresented', 'trackLessonView'
     ];
 
     if (protectedActions.includes(action)) {
@@ -116,6 +117,9 @@ function doPost(e) {
       addClass:    () => addClass(body),
       updateClass: () => updateClass(body),
       deleteClass: () => deleteClass(body),
+
+      trackUnitPresented: () => trackUnitPresented(body),
+      trackLessonView:    () => trackLessonView(body),
     };
 
     if (!handlers[action]) {
@@ -614,7 +618,7 @@ function getGroupLessons({ verifiedEmail, group_id }) {
       };
     });
 
-  return { lessons };
+  return { lessons, last_unit_id: group.last_unit_id || '' };
 }
 
 /**
@@ -1062,6 +1066,76 @@ function toggleUnit({ verifiedEmail, unit_id, is_open }) {
 
     return { unit_id, is_open };
   });
+}
+
+/**
+ * מסמנת שהמורה הציג (מצגת) יחידה מסוימת עכשיו — כדי שכפתור "המשך מאיפה
+ * שעצרנו" בדשבורד יוכל להוביל ישר לאותה יחידה, גם ממחשב אחר (נשמר בגיליון,
+ * לא רק בדפדפן). לא חוסמת אם היחידה לא נמצאה — זו פעולת מעקב "best effort".
+ */
+function trackUnitPresented({ verifiedEmail, unit_id }) {
+  requireRole(verifiedEmail, ['teacher','admin','school_admin']);
+  const now = new Date().toISOString();
+
+  return withLock(() => {
+    const ss         = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const unitsSheet = ensureUnitLastPresentedColumn(ss.getSheetByName('units'));
+    const units      = sheetToObjects(unitsSheet);
+    const headers    = getHeaders(unitsSheet);
+
+    const idx = units.findIndex(u => u.unit_id == unit_id && u.teacher_email == verifiedEmail);
+    if (idx === -1) return { tracked: false };
+
+    const rowNum = idx + 2;
+    const colIdx = headers.indexOf('last_presented_at') + 1;
+    if (colIdx > 0) unitsSheet.getRange(rowNum, colIdx).setValue(now);
+
+    return { tracked: true };
+  });
+}
+
+/** הוספה חד-פעמית (self-healing) של עמודת last_presented_at לטאב units. */
+function ensureUnitLastPresentedColumn(sheet) {
+  const headers = getHeaders(sheet);
+  if (headers.indexOf('last_presented_at') === -1) {
+    sheet.getRange(1, headers.length + 1).setValue('last_presented_at');
+  }
+  return sheet;
+}
+
+/**
+ * מסמנת שקבוצת תלמידים פתחה יחידת לימוד מסוימת — כדי שכפתור "המשך מאיפה
+ * שעצרתם" יוביל ישר לשיעור האחרון שנפתח, גם ממכשיר אחר (נשמר בגיליון).
+ * בדיקת הרשאה זהה לזו שב-getGroupLessons: רק חבר בקבוצה.
+ */
+function trackLessonView({ verifiedEmail, group_id, unit_id }) {
+  return withLock(() => {
+    const ss          = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const groupsSheet = ensureGroupLastUnitColumn(ss.getSheetByName('groups'));
+    const groups      = sheetToObjects(groupsSheet);
+    const headers     = getHeaders(groupsSheet);
+
+    const idx = groups.findIndex(g => g.group_id == group_id);
+    if (idx === -1) return { tracked: false };
+
+    const members = String(groups[idx].members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
+    if (!members.includes(String(verifiedEmail).toLowerCase())) return { tracked: false };
+
+    const rowNum = idx + 2;
+    const colIdx = headers.indexOf('last_unit_id') + 1;
+    if (colIdx > 0) groupsSheet.getRange(rowNum, colIdx).setValue(unit_id);
+
+    return { tracked: true };
+  });
+}
+
+/** הוספה חד-פעמית (self-healing) של עמודת last_unit_id לטאב groups. */
+function ensureGroupLastUnitColumn(sheet) {
+  const headers = getHeaders(sheet);
+  if (headers.indexOf('last_unit_id') === -1) {
+    sheet.getRange(1, headers.length + 1).setValue('last_unit_id');
+  }
+  return sheet;
 }
 
 /**
