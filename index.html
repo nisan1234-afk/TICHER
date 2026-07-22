@@ -132,6 +132,12 @@
       <button class="btn btn-ghost" onclick="signOut()">כניסה עם חשבון אחר</button>
     </div>
 
+    <div class="screen" id="roleScreen">
+      <div class="card-title">איך להיכנס היום?</div>
+      <div class="card-sub">יש לך כמה תפקידים במערכת — בחר איך להיכנס עכשיו.</div>
+      <div id="roleButtons"></div>
+    </div>
+
     <div class="screen" id="registerScreen">
       <div class="card-title">הרשמת מורה חדש</div>
       <div class="card-sub">מלא את הפרטים — המנהל יאשר את חשבונך.</div>
@@ -206,9 +212,31 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  const STAFF_ROLE_LABELS = { admin: 'מנהל מערכת', school_admin: 'מנהל בית ספר', teacher: 'מורה', homeroom: 'מחנך/ת' };
+
   function goToDashboard(user) {
     const roles = user.roles || [user.role];
-    window.location.href = roles.includes('student') ? 'student.html' : 'teacher.html';
+    const hasStudent = roles.includes('student');
+    const staffRoles = roles.filter(r => STAFF_ROLE_LABELS[r]);
+
+    if (hasStudent && staffRoles.length) {
+      showRolePicker(staffRoles);
+      return;
+    }
+    window.location.href = hasStudent ? 'student.html' : 'teacher.html';
+  }
+
+  function showRolePicker(staffRoles) {
+    const staffLabel = staffRoles.map(r => STAFF_ROLE_LABELS[r]).join(' / ');
+    document.getElementById('roleButtons').innerHTML = `
+      <button class="btn btn-primary" onclick="chooseRole('teacher.html')">כניסה כ${staffLabel}</button>
+      <button class="btn btn-ghost" onclick="chooseRole('student.html')">כניסה כתלמיד/ה</button>
+    `;
+    showScreen('roleScreen');
+  }
+
+  function chooseRole(target) {
+    window.location.href = target;
   }
 
   async function handleRegister() {

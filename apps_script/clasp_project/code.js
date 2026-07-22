@@ -793,8 +793,51 @@ function updateFindingStatus({ verifiedEmail, finding_id, status, teacher_note }
       const colIdx = headers.indexOf(key) + 1;
       if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
     });
+
+    if (status === 'approved') {
+      exportFindingToProject_(ss, rows[idx]);
+    }
+
     return { updated: true };
   });
+}
+
+/**
+ * מייצאת ממצא מאושר לתוך הסעיף המתאים בטאב projects — כותבת רק את השדה
+ * הספציפי (target_field) בתוך ה-JSON של הסעיף, בלי לדרוס שדות אחרים שהתלמיד
+ * כתב ידנית באותו סעיף. נקראת רק כשמורה מאשר ממצא (status='approved').
+ */
+function exportFindingToProject_(ss, finding) {
+  const block = sheetToObjects(ensureLessonBlocksSheet(ss)).find(b => b.block_id === finding.block_id);
+  if (!block || !block.target_field || !finding.project_section) return;
+
+  const projectsSheet = ss.getSheetByName('projects');
+  const projects       = sheetToObjects(projectsSheet);
+  const projIdx        = projects.findIndex(p => p.group_id == finding.group_id || p.pair_id == finding.group_id);
+  const now            = new Date().toISOString();
+  const colName        = 'section_' + finding.project_section;
+
+  let sectionObj = {};
+  if (projIdx !== -1 && projects[projIdx][colName]) {
+    try { sectionObj = JSON.parse(projects[projIdx][colName]); } catch (e) { sectionObj = {}; }
+  }
+  sectionObj[block.target_field] = finding.content;
+  const newValue = JSON.stringify(sectionObj);
+
+  if (projIdx === -1) {
+    const newRow = { group_id: finding.group_id };
+    for (let i = 1; i <= 8; i++) newRow['section_' + i] = '';
+    newRow[colName] = newValue;
+    newRow.last_updated = now;
+    appendRow(projectsSheet, newRow);
+  } else {
+    const headers = getHeaders(projectsSheet);
+    const rowNum  = projIdx + 2;
+    const colIdx  = headers.indexOf(colName) + 1;
+    const updIdx  = headers.indexOf('last_updated') + 1;
+    if (colIdx > 0) projectsSheet.getRange(rowNum, colIdx).setValue(newValue);
+    if (updIdx > 0) projectsSheet.getRange(rowNum, updIdx).setValue(now);
+  }
 }
 
 /** מוסיפה עמודות score/score_feedback לטאב lesson_answers אם עוד לא קיימות. */
