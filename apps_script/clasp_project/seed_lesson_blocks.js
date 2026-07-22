@@ -151,11 +151,17 @@ const LESSON_BLOCKS_SEED_DATA = {
       answer_scope: 'project',
       project_section: '1',
       target_field: 'site_basic',
-      game_data: (function () {
-        const t = STRUCTURED_SITE_CHECK_TEMPLATE();
-        t.categories = ['אטרקציה טבעית', 'אתר היסטורי או תרבותי', 'יעד עירוני', 'אירוע תיירותי', 'מתחם בילוי או פנאי'];
-        return t;
-      })()
+      game_data: {
+        categories: ['אטרקציה טבעית', 'אתר היסטורי או תרבותי', 'יעד עירוני', 'אירוע תיירותי', 'מתחם בילוי או פנאי'],
+        fillPrompt: 'כתבו את שם האתר ומיקומו.',
+        evidenceLabel: 'הקישור שמצאתם הוא הראיה: תארו בקצרה מה רואים בו (למשל: אתר רשמי, דף פייסבוק, פרופיל אינסטגרם).',
+        evidenceLinkLabel: 'הדביקו כאן את הקישור שמצאתם.',
+        explainParts: ['הקישור הזה מוכיח שיש לאתר מספיק נוכחות דיגיטלית למחקר, מפני ש-'],
+        ratingLabel: 'הערכה:',
+        ratingOptions: ['טוב', 'חלקי', 'חסר', 'דורש שיפור'],
+        ratingReasonLabel: 'בחרנו בהערכה זו מפני ש־________.',
+        checklist: ['בדקתי שהקישור אכן מראה נוכחות דיגיטלית של האתר, ולא רק תוצאת חיפוש כללית.']
+      }
     },
     {
       block_type: 'question',
