@@ -67,7 +67,7 @@ function doPost(e) {
       'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup',
       'getFindingsForTeacher', 'updateFindingStatus',
       'addClass', 'updateClass', 'deleteClass',
-      'trackUnitPresented', 'trackLessonView'
+      'trackUnitPresented', 'trackLessonView', 'saveFcmToken'
     ];
 
     if (protectedActions.includes(action)) {
@@ -120,6 +120,7 @@ function doPost(e) {
 
       trackUnitPresented: () => trackUnitPresented(body),
       trackLessonView:    () => trackLessonView(body),
+      saveFcmToken:       () => saveFcmToken(body),
     };
 
     if (!handlers[action]) {
@@ -798,8 +799,34 @@ function updateFindingStatus({ verifiedEmail, finding_id, status, teacher_note }
       exportFindingToProject_(ss, rows[idx]);
     }
 
+    if (status === 'approved' || status === 'returned') {
+      notifyGroupAboutFinding_(ss, group, status, teacher_note, rows[idx]);
+    }
+
     return { updated: true };
   });
+}
+
+/**
+ * שולחת התראת Push לכל חברי הקבוצה כשמורה מאשר/מחזיר ממצא — "פושים" לפי
+ * בקשת ניסן. Best-effort: אם FCM לא מוגדר (Script Property חסר) או תלמיד
+ * מעולם לא אישר התראות, פשוט לא נשלח כלום, לא שובר את אישור הממצא עצמו.
+ */
+function notifyGroupAboutFinding_(ss, group, status, teacher_note, finding) {
+  if (!group) return;
+  const block = sheetToObjects(ensureLessonBlocksSheet(ss)).find(b => b.block_id === finding.block_id);
+  const blockTitle = (block && block.title) ? block.title : 'התוצר שלכם';
+
+  const title = status === 'approved' ? '🎉 המורה אישר תוצר' : '✏️ המורה מבקש תיקון';
+  let body = status === 'approved'
+    ? `כל הכבוד! "${blockTitle}" אושר.`
+    : `"${blockTitle}" חוזר לתיקון.`;
+  if (teacher_note) body += ' ' + teacher_note;
+
+  const members = String(group.members || '').split(',').map(m => m.trim()).filter(Boolean);
+  members.forEach(email => sendPushToEmail_(ss, email, title, body, {
+    type: 'finding_status', finding_id: finding.finding_id, group_id: group.group_id
+  }));
 }
 
 /**
@@ -901,6 +928,128 @@ function ensureFindingsSheet(ss) {
     'finding_id', 'group_id', 'unit_id', 'block_id', 'project_section',
     'content', 'status', 'teacher_note', 'updated_at'
   ]);
+}
+
+/** טאב fcm_tokens — טוקני התראות Push של תלמידים, מכשיר אחד או יותר לכל מייל. */
+function ensureFcmTokensSheet_(ss) {
+  return ensureSheetWithHeaders(ss, 'fcm_tokens', ['email', 'token', 'updated_at']);
+}
+
+/**
+ * נקראת מהדפדפן אחרי שהתלמיד אישר התראות ו-Firebase החזיר טוקן FCM.
+ * upsert לפי (email, token) — כדי לתמוך בכמה מכשירים לאותו תלמיד בלי לדרוס.
+ */
+function saveFcmToken({ verifiedEmail, token }) {
+  if (!token) throw new Error('חסר טוקן התראות');
+  return withLock(() => {
+    const ss     = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet  = ensureFcmTokensSheet_(ss);
+    const rows   = sheetToObjects(sheet);
+    const idx    = rows.findIndex(r => String(r.email).toLowerCase() === String(verifiedEmail).toLowerCase() && r.token === token);
+    const now    = new Date().toISOString();
+
+    if (idx === -1) {
+      appendRow(sheet, { email: verifiedEmail, token, updated_at: now });
+    } else {
+      sheet.getRange(idx + 2, getHeaders(sheet).indexOf('updated_at') + 1).setValue(now);
+    }
+    return { saved: true };
+  });
+}
+
+/**
+ * מחזיר Access Token תקף מול Firebase Cloud Messaging (HTTP v1), בנוי מ-JWT
+ * חתום עם המפתח הפרטי של ה-Service Account שנשמר ב-Script Properties
+ * (FIREBASE_SERVICE_ACCOUNT_KEY — כל תוכן קובץ ה-JSON כמחרוזת אחת).
+ * מטמון ל-55 דקות כדי לא לייצר טוקן חדש בכל שליחת התראה.
+ */
+function getFirebaseAccessToken_() {
+  const cache  = CacheService.getScriptCache();
+  const cached = cache.get('fcm_access_token');
+  if (cached) return cached;
+
+  const keyJson = PropertiesService.getScriptProperties().getProperty('FIREBASE_SERVICE_ACCOUNT_KEY');
+  if (!keyJson) throw new Error('לא הוגדר FIREBASE_SERVICE_ACCOUNT_KEY ב-Script Properties');
+  const key = JSON.parse(keyJson);
+
+  const now      = Math.floor(Date.now() / 1000);
+  const header   = { alg: 'RS256', typ: 'JWT' };
+  const claimSet = {
+    iss:   key.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud:   'https://oauth2.googleapis.com/token',
+    exp:   now + 3600,
+    iat:   now
+  };
+
+  const b64url  = obj => Utilities.base64EncodeWebSafe(JSON.stringify(obj)).replace(/=+$/, '');
+  const toSign  = b64url(header) + '.' + b64url(claimSet);
+  const sigBytes = Utilities.computeRsaSha256Signature(toSign, key.private_key);
+  const jwt = toSign + '.' + Utilities.base64EncodeWebSafe(sigBytes).replace(/=+$/, '');
+
+  const res = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+    method: 'post',
+    payload: { grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt },
+    muteHttpExceptions: true
+  });
+  const data = JSON.parse(res.getContentText());
+  if (!data.access_token) throw new Error('כשל בקבלת אסימון Firebase: ' + res.getContentText());
+
+  cache.put('fcm_access_token', data.access_token, 3300);
+  return data.access_token;
+}
+
+/** שליחת הודעת FCM יחידה לטוקן מכשיר אחד. מחזיר { ok, invalid } כדי שהקורא ינקה טוקנים מתים. */
+function sendFcmToToken_(token, title, body, data) {
+  const keyJson = PropertiesService.getScriptProperties().getProperty('FIREBASE_SERVICE_ACCOUNT_KEY');
+  const projectId = JSON.parse(keyJson).project_id;
+  const accessToken = getFirebaseAccessToken_();
+
+  const message = {
+    message: {
+      token,
+      notification: { title, body },
+      webpush: { fcm_options: { link: 'https://nisan1234-afk.github.io/tourismdigi/student.html' } },
+      data: data || {}
+    }
+  };
+
+  const res = UrlFetchApp.fetch('https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + accessToken },
+    payload: JSON.stringify(message),
+    muteHttpExceptions: true
+  });
+  const result = JSON.parse(res.getContentText());
+  if (result.error) {
+    return { ok: false, invalid: ['UNREGISTERED', 'INVALID_ARGUMENT', 'NOT_FOUND'].includes(result.error.status) };
+  }
+  return { ok: true };
+}
+
+/**
+ * שולחת התראה לכל המכשירים הרשומים של מייל נתון. Best-effort לגמרי —
+ * כל שגיאה (Script Property חסר, טוקן לא תקין וכו') נבלעת בשקט כדי שלא
+ * תשבור פעולה עסקית אחרת (כמו אישור ממצא). טוקנים "מתים" נמחקים מהגיליון.
+ */
+function sendPushToEmail_(ss, email, title, body, data) {
+  try {
+    const sheet = ensureFcmTokensSheet_(ss);
+    const rows  = sheetToObjects(sheet);
+    const stringData = {};
+    Object.keys(data || {}).forEach(k => stringData[k] = String(data[k]));
+
+    const deadRows = [];
+    rows.forEach((r, i) => {
+      if (String(r.email).toLowerCase() !== String(email).toLowerCase()) return;
+      const result = sendFcmToToken_(r.token, title, body, stringData);
+      if (result && !result.ok && result.invalid) deadRows.push(i);
+    });
+    deadRows.sort((a, b) => b - a).forEach(i => sheet.deleteRow(i + 2));
+  } catch (e) {
+    // התראות הן best-effort — לא חוסמות שום פעולה אחרת
+  }
 }
 
 function ensureSheetWithHeaders(ss, name, headers) {
