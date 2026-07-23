@@ -62,6 +62,7 @@ function doPost(e) {
       'saveSection', 'toggleUnit', 'addUnit', 'updateLesson', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles', 'bulkImportGroups',
+      'updateGroup', 'deleteGroup',
       'proposeSite', 'chatWithBot',
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
       'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup',
@@ -98,6 +99,8 @@ function doPost(e) {
       uploadFile:          () => uploadFile(body),
       getGroupFiles:       () => getGroupFiles(body),
       bulkImportGroups:    () => bulkImportGroups(body),
+      updateGroup:         () => updateGroup(body),
+      deleteGroup:         () => deleteGroup(body),
 
       proposeSite:         () => proposeSite(body),
       chatWithBot:         () => chatWithBot(body),
@@ -323,6 +326,7 @@ function getTeacherDashboard({ verifiedEmail }) {
     return {
       group_id:        group.group_id,
       group_name:      group.group_name || group.group_id,
+      class_id:        group.class_id || '',
       members,
       site_name:       group.site_name,
       current_section: group.current_section,
@@ -1570,6 +1574,48 @@ function bulkImportGroups({ verifiedEmail, rows }) {
     });
 
     return { results };
+  });
+}
+
+/** עריכת שם קבוצה ו/או שיוך לכיתה. שדות שלא נשלחים (undefined) לא נדרסים. */
+function updateGroup({ verifiedEmail, group_id, group_name, class_id }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('groups');
+    const groups = sheetToObjects(sheet);
+    const idx = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('קבוצה לא נמצאה');
+
+    const headers = getHeaders(sheet);
+    const rowNum  = idx + 2;
+    if (group_name !== undefined) {
+      const colIdx = headers.indexOf('group_name') + 1;
+      if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(group_name);
+    }
+    if (class_id !== undefined) {
+      const colIdx = headers.indexOf('class_id') + 1;
+      if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(class_id);
+    }
+    return { updated: true };
+  });
+}
+
+/**
+ * מוחקת קבוצה. לא מוחקת בשרשור את הנתונים הקשורים אליה (projects/lesson_answers/
+ * findings/activity_log) — נשארים "יתומים" בגיליון, לא נגישים דרך שום מסך אחרי
+ * המחיקה, לא גורמים נזק. אותה גישה כמו deleteClass הקיים.
+ */
+function deleteGroup({ verifiedEmail, group_id }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  return withLock(() => {
+    const ss    = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const sheet = ss.getSheetByName('groups');
+    const groups = sheetToObjects(sheet);
+    const idx = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
+    if (idx === -1) throw new Error('קבוצה לא נמצאה');
+    sheet.deleteRow(idx + 2);
+    return { deleted: true };
   });
 }
 
