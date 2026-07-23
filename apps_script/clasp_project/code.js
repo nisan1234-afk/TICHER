@@ -61,7 +61,7 @@ function doPost(e) {
       'getMyProfile', 'getTeacherDashboard', 'getGroupData',
       'saveSection', 'toggleUnit', 'addUnit', 'updateLesson', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
-      'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles',
+      'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles', 'bulkImportGroups',
       'proposeSite', 'chatWithBot',
       'saveLessonAnswer', 'addLessonBlock', 'updateLessonBlock', 'deleteLessonBlock', 'getGroupChatLog',
       'getGroupLessonAnswers', 'saveTeacherSectionEdit', 'sendBackupEmail', 'restoreBackup',
@@ -97,6 +97,7 @@ function doPost(e) {
       removeMember:        () => removeMember(body),
       uploadFile:          () => uploadFile(body),
       getGroupFiles:       () => getGroupFiles(body),
+      bulkImportGroups:    () => bulkImportGroups(body),
 
       proposeSite:         () => proposeSite(body),
       chatWithBot:         () => chatWithBot(body),
@@ -1500,6 +1501,76 @@ function addGroup({ verifiedEmail, class_id, group_name, members }) {
   });
 
   return { group_id, folderId, created: true };
+}
+
+/**
+ * יוצרת כיתות + קבוצות בבת אחת מתוך שורות שהתקבלו מטופס אקסל שהמורה מילא
+ * והעלה. כל שורה: class_name (אופציונלי), group_name, student_name (לא נשמר,
+ * רק לנוחות המורה במילוי), student_email. שורות עם אותו (class_name, group_name)
+ * מתאחדות לקבוצה אחת עם כמה חברים. כיתה בשם שלא קיים עדיין נוצרת אוטומטית;
+ * קבוצה בשם שכבר קיים אצל אותו מורה מדולגת (לא נדרסת), כדי שהעלאה כפולה
+ * בטעות לא תיצור כפילויות או תדרוס נתונים.
+ */
+function bulkImportGroups({ verifiedEmail, rows }) {
+  requireRole(verifiedEmail, ['teacher', 'admin', 'school_admin']);
+  if (!Array.isArray(rows) || !rows.length) throw new Error('לא התקבלו שורות לייבוא');
+
+  return withLock(() => {
+    const ss           = SpreadsheetApp.openById(SHEETS.TOURISM);
+    const classesSheet = ensureClassesSheet(ss);
+    const classes       = sheetToObjects(classesSheet);
+    const groupsSheet  = ss.getSheetByName('groups');
+    const existingGroups = sheetToObjects(groupsSheet);
+    const existingGroupNames = new Set(
+      existingGroups.filter(g => g.teacher_email == verifiedEmail).map(g => String(g.group_name || '').trim())
+    );
+
+    const grouped = {};
+    rows.forEach(r => {
+      const className = String(r.class_name || '').trim();
+      const groupName  = String(r.group_name || '').trim();
+      const email      = String(r.student_email || '').trim().toLowerCase();
+      if (!groupName || !email || email.indexOf('@') === -1) return;
+
+      const key = className + '|' + groupName;
+      if (!grouped[key]) grouped[key] = { className, groupName, members: [] };
+      if (!grouped[key].members.includes(email)) grouped[key].members.push(email);
+    });
+
+    const results = [];
+    Object.values(grouped).forEach(g => {
+      if (existingGroupNames.has(g.groupName)) {
+        results.push({ group_name: g.groupName, class_name: g.className, status: 'skipped', reason: 'קבוצה בשם הזה כבר קיימת' });
+        return;
+      }
+
+      let class_id = '';
+      if (g.className) {
+        let classRow = classes.find(c => c.class_name === g.className && c.teacher_email == verifiedEmail);
+        if (!classRow) {
+          class_id = 'class_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+          appendRow(classesSheet, { class_id, class_name: g.className, teacher_email: verifiedEmail, created_at: new Date().toISOString() });
+          classes.push({ class_id, class_name: g.className, teacher_email: verifiedEmail });
+        } else {
+          class_id = classRow.class_id;
+        }
+      }
+
+      let folderId = '';
+      try { folderId = createGroupFolder(verifiedEmail, g.groupName); } catch (e) { /* ממשיכים בלי תיקייה */ }
+
+      const group_id = 'group_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      appendRow(groupsSheet, {
+        group_id, class_id, group_name: g.groupName, members: g.members.join(','),
+        teacher_email: verifiedEmail, site_name: '', site_url: '', site_score: '',
+        current_section: 1, last_active: new Date().toISOString(), created_date: new Date().toISOString()
+      });
+      existingGroupNames.add(g.groupName);
+      results.push({ group_name: g.groupName, class_name: g.className, status: 'created', members_count: g.members.length });
+    });
+
+    return { results };
+  });
 }
 
 function addMember({ verifiedEmail, group_id, member_email }) {
