@@ -1014,7 +1014,7 @@ function sendFcmToToken_(token, title, body, data) {
     message: {
       token,
       notification: { title, body },
-      webpush: { fcm_options: { link: 'https://nisan1234-afk.github.io/tourismdigi/student.html' } },
+      webpush: { fcm_options: { link: 'https://nisan1234-afk.github.io/student/' } },
       data: data || {}
     }
   };
