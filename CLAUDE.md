@@ -6,21 +6,45 @@
 
 פלטפורמת ניהול לימודי מודולרית ("כיתה פלוס"), מקצוע ראשון = תיירות דיגיטלית ("tourismdigi"). Frontend סטטי ב-GitHub Pages, Backend = Google Apps Script יחיד, נתונים ב-Google Sheets/Docs/Drive, אימות ב-Google Sign-In בלבד.
 
-## מבנה הריפו (כפי שידוע נכון לרגע המעבר)
-
-```
-TICHER/
-  index.html      # התחברות + זיהוי תפקיד
-  teacher.html
-  homeroom.html
-  student.html
-  admin.html
-tourismdigi/
-  teacher.html
-  student.html
-```
+## מבנה הריפו (עודכן 2026-07-24 — מבנה כתובות נקי, בלי שמות repo)
 
 **חשוב:** יש לאמת מבנה זה מול הריפו בפועל בתחילת כל סשן — יכול להיות שהתווסף/שונה משהו מאז כתיבת מסמך זה.
+
+הכתובות הפומביות רוכזו ב-repo של `nisan1234-afk.github.io` (בלי `.html`, בלי שם repo פנימי בכתובת):
+```
+nisan1234-afk.github.io/           # התחברות (Google Sign-In) — היה TICHER/index.html
+nisan1234-afk.github.io/teacher/   # דשבורד "כל המקצועות" למורה — היה TICHER/teacher.html
+nisan1234-afk.github.io/student/   # דשבורד "כל המקצועות" לתלמיד — היה TICHER/student.html
+nisan1234-afk.github.io/homeroom/  # היה TICHER/homeroom.html
+nisan1234-afk.github.io/admin/     # היה TICHER/admin.html
+nisan1234-afk.github.io/tourism/teacher/  # ממשק מורה תיירות דיגיטלית — repo tourism (שונה שם מ-tourismdigi)
+nisan1234-afk.github.io/tourism/student/  # ממשק תלמיד תיירות דיגיטלית
+```
+
+**מבנה קבצים בפועל בכל repo:**
+```
+nisan1234-afk.github.io/   (repo)
+  index.html                # התחברות
+  teacher/index.html
+  student/index.html
+  homeroom/index.html
+  admin/index.html
+  manifest.json, sw.js, icons  # PWA, משותף לכל האתר
+
+TICHER/   (repo — עדיין באותו שם, אבל כבר לא מארח דפים ציבוריים)
+  index.html, teacher.html, student.html, homeroom.html, admin.html
+    # כולם עכשיו stub-ים קטנים שמפנים (redirect) לכתובת החדשה ב-root —
+    # רשת ביטחון לקישורים ישנים ש-Nisan אולי כבר שיתף, לא נמחקו
+  apps_script/clasp_project/   # קוד ה-backend האמיתי, כאן זה נשאר
+  CLAUDE.md, רקע_וחזון_הפרויקט.md
+
+tourismdigi/   (תיקייה מקומית — ה-repo המרוחק נקרא tourism, לא tourismdigi;
+                שינוי שם repo לא שינה את שם התיקייה המקומית, זה תקין)
+  teacher.html, student.html   # stub-ים שמפנים ל-/tourism/teacher/ ו-/tourism/student/
+  teacher/index.html, student/index.html   # התוכן האמיתי
+```
+
+**קריטי לזכור:** שינוי שם ה-repo מ-`tourismdigi` ל-`tourism` **שבר לגמרי** את הכתובת הישנה `nisan1234-afk.github.io/tourismdigi/...` — GitHub לא מפנה אוטומטית כתובות Pages אחרי שינוי שם repo (בניגוד ל-`git clone`/remote, ששם עדיין עובד). אושר עם Nisan מראש שזה מקובל כי האתר עדיין לפני ההשקה לתלמידים אמיתיים (ספטמבר). לעומת זאת, כתובות `TICHER/...` **כן** ממשיכות לעבוד — כי שם ה-repo לא השתנה, רק תוכן הקבצים הוחלף ב-stub-ים.
 
 ## מוסכמות ארכיטקטוניות (אין לשנות בלי לוודא מול ניסן)
 
