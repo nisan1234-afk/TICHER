@@ -58,7 +58,7 @@ function doPost(e) {
     const action = body.action;
 
     const protectedActions = [
-      'getMyProfile', 'getTeacherDashboard', 'getGroupData',
+      'getMyProfile', 'getTeacherDashboard', 'getGroupData', 'getMyStudentGroup',
       'saveSection', 'toggleUnit', 'addUnit', 'updateLesson', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles', 'bulkImportGroups',
@@ -87,6 +87,7 @@ function doPost(e) {
       updatePassword:      () => updatePassword(body),
       getTeacherDashboard: () => getTeacherDashboard(body),
       getGroupData:        () => getGroupData(body),
+      getMyStudentGroup:   () => getMyStudentGroup(body),
       saveSection:         () => saveSection(body),
       toggleUnit:          () => toggleUnit(body),
       addUnit:             () => addUnit(body),
@@ -163,6 +164,18 @@ function verifyGoogleToken(token) {
 
 // ========== פרופיל משתמש ==========
 
+/**
+ * מנקה תווי כיווניות/רוחב-אפס בלתי-נראים (RTL/LRM/BOM וכו') לפני השוואת
+ * מיילים — .trim() לבד לא תופס אותם. מיילים שהודבקו מטקסט מעורב עברית/אנגלית
+ * (וורד, PDF, שיטס עצמו) לפעמים גוררים תו כזה שנדבק לסוף המחרוזת ושובר
+ * השוואה מדויקת (מקרה אמיתי שנתפס: ofmanliat@gmail.com עם U+200F בסוף).
+ */
+function stripInvisible_(s) {
+  const INVISIBLE_CODES = [0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0xFEFF];
+  const INVISIBLE_RE = new RegExp('[' + INVISIBLE_CODES.map(function (c) { return String.fromCharCode(c); }).join('') + ']', 'g');
+  return String(s).replace(INVISIBLE_RE, '').trim().toLowerCase();
+}
+
 function getMyProfile({ verifiedEmail, verifiedName }) {
   const ss = SpreadsheetApp.openById(SHEETS.KITA_PLUS);
 
@@ -205,16 +218,10 @@ function getMyProfile({ verifiedEmail, verifiedName }) {
   // שכל שאר הקוד (saveLessonAnswer/getGroupLessons/getGroupData וכו') כבר
   // בודק. בלי הבדיקה הזו כאן, תלמיד שהמורה הוסיף לקבוצה בפועל היה מקבל
   // "משתמש לא נמצא" בכניסה הראשונה שלו — באג אמיתי שתפס את כל התלמידים.
-  // .trim() לבד לא מספיק — מיילים שהודבקו מטקסט מעורב עברית/אנגלית (וורד,
-  // PDF, שיטס עצמו) לפעמים גוררים תו כיווניות בלתי-נראה (RTL/LRM וכו') שנדבק
-  // לסוף המחרוזת ושובר השוואה מדויקת. מסירים כל תווי הכיווניות/רוחב-אפס.
-  const INVISIBLE_CODES = [0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0xFEFF];
-  const INVISIBLE_RE = new RegExp('[' + INVISIBLE_CODES.map(function (c) { return String.fromCharCode(c); }).join('') + ']', 'g');
-  const stripInvisible = s => String(s).replace(INVISIBLE_RE, '').trim().toLowerCase();
-  const emailToCheck = stripInvisible(verifiedEmail);
+  const emailToCheck = stripInvisible_(verifiedEmail);
   const isGroupMember = ['TOURISM'].some(key => {
     const groups = sheetToObjects(SpreadsheetApp.openById(SHEETS[key]).getSheetByName('groups'));
-    return groups.some(g => String(g.members || '').split(',').map(stripInvisible).includes(emailToCheck));
+    return groups.some(g => String(g.members || '').split(',').map(stripInvisible_).includes(emailToCheck));
   });
   if (isGroupMember) {
     return {
@@ -338,35 +345,67 @@ function getTeacherDashboard({ verifiedEmail }) {
       return Object.assign({}, u, { blocks });
     });
   const myGroups = allGroups.filter(g => g.teacher_email == verifiedEmail);
-
-  const groups = myGroups.map(group => {
-    const project  = allProjects.find(p => p.pair_id == group.group_id || p.group_id == group.group_id) || {};
-    const members  = String(group.members || '').split(',').map(m => m.trim()).filter(Boolean);
-    const groupLogs = allLogs.filter(l => l.group_id == group.group_id || l.pair_id == group.group_id);
-
-    let completedSections = 0;
-    for (let i = 1; i <= 8; i++) {
-      if (project['section_' + i]) completedSections++;
-    }
-
-    return {
-      group_id:        group.group_id,
-      group_name:      group.group_name || group.group_id,
-      class_id:        group.class_id || '',
-      members,
-      site_name:       group.site_name,
-      current_section: group.current_section,
-      last_active:     group.last_active,
-      completed:       completedSections,
-      total:           8,
-      percent:         Math.round((completedSections / 8) * 100),
-      contribution:    calcContribution(groupLogs, members)
-    };
-  });
+  const groups = myGroups.map(group => buildGroupSummary_(group, allProjects, allLogs));
 
   const classes = sheetToObjects(ensureClassesSheet(ss)).filter(c => c.teacher_email == verifiedEmail);
 
   return { groups, units, classes };
+}
+
+/** תקציר סטטיסטי של קבוצה (התקדמות/תרומה) — משותף בין getTeacherDashboard (למורה) ו-getMyStudentGroup (לתלמיד). */
+function buildGroupSummary_(group, allProjects, allLogs) {
+  const project  = allProjects.find(p => p.pair_id == group.group_id || p.group_id == group.group_id) || {};
+  const members  = String(group.members || '').split(',').map(m => m.trim()).filter(Boolean);
+  const groupLogs = allLogs.filter(l => l.group_id == group.group_id || l.pair_id == group.group_id);
+
+  let completedSections = 0;
+  for (let i = 1; i <= 8; i++) {
+    if (project['section_' + i]) completedSections++;
+  }
+
+  return {
+    group_id:        group.group_id,
+    group_name:      group.group_name || group.group_id,
+    class_id:        group.class_id || '',
+    members,
+    site_name:       group.site_name,
+    site_url:        group.site_url,
+    current_section: group.current_section,
+    last_active:     group.last_active,
+    completed:       completedSections,
+    total:           8,
+    percent:         Math.round((completedSections / 8) * 100),
+    contribution:    calcContribution(groupLogs, members)
+  };
+}
+
+/**
+ * מוצאת את הקבוצה של תלמיד לפי חברות (members), לא לפי teacher_email —
+ * getTeacherDashboard מוגבל לקבוצות שבהן הקורא הוא *המורה*, ולכן אף פעם לא
+ * עבד לתלמיד אמיתי (באג אמיתי, נתפס יחד עם התיקון ב-getMyProfile: תלמיד
+ * שהצליח להתחבר עדיין נתקל ב"לא שויכת לקבוצה" במסך הבא, כי שני המסכים
+ * (דשבורד השורש לתלמיד וגם עמוד הקורס עצמו) קראו בטעות ל-getTeacherDashboard
+ * כדי "למצוא את הקבוצה שלי"). ה-classAvg מחושב רק כמספר מצטבר על קבוצות
+ * אותו מורה — לא חושף פרטי קבוצות אחרות (מיילים/שמות אתר) לתלמיד.
+ */
+function getMyStudentGroup({ verifiedEmail }) {
+  const ss = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const allGroups   = sheetToObjects(ss.getSheetByName('groups'));
+  const allProjects = sheetToObjects(ss.getSheetByName('projects'));
+  const allLogs     = sheetToObjects(ss.getSheetByName('activity_log'));
+
+  const emailNorm = stripInvisible_(verifiedEmail);
+  const rawGroup = allGroups.find(g => String(g.members || '').split(',').map(stripInvisible_).includes(emailNorm));
+  if (!rawGroup) throw new Error('לא שויכת לקבוצה');
+
+  const group = buildGroupSummary_(rawGroup, allProjects, allLogs);
+
+  const classmateGroups = allGroups.filter(g => g.teacher_email == rawGroup.teacher_email);
+  const classAvg = classmateGroups.length
+    ? Math.round(classmateGroups.reduce((sum, g) => sum + buildGroupSummary_(g, allProjects, allLogs).percent, 0) / classmateGroups.length)
+    : group.percent;
+
+  return { group, classAvg };
 }
 
 function getGroupData({ verifiedEmail, group_id }) {
@@ -380,7 +419,7 @@ function getGroupData({ verifiedEmail, group_id }) {
   if (!group) throw new Error('קבוצה לא נמצאה');
 
   const members = String(group.members || '').split(',').map(m => m.trim()).filter(Boolean);
-  const isMember = members.some(m => m.toLowerCase() === String(verifiedEmail).toLowerCase());
+  const isMember = members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail));
 
   const ssKP  = SpreadsheetApp.openById(SHEETS.KITA_PLUS);
   const roles = getRoles(ssKP, verifiedEmail);
