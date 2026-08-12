@@ -323,7 +323,7 @@ function getTeacherDashboard({ verifiedEmail }) {
   const allProjects = sheetToObjects(ss.getSheetByName('projects'));
   const allUnits    = sheetToObjects(ss.getSheetByName('units'));
   const allLogs     = sheetToObjects(ss.getSheetByName('activity_log'));
-  const allBlocks   = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const allBlocks   = getLessonBlocksCached_(ss);
 
   const units = allUnits
     .filter(u => u.teacher_email == verifiedEmail)
@@ -637,7 +637,7 @@ function getGroupLessons({ verifiedEmail, group_id }) {
   }
 
   const allUnits  = sheetToObjects(ss.getSheetByName('units'));
-  const allBlocks = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const allBlocks = getLessonBlocksCached_(ss);
   const allAnswers = sheetToObjects(ensureLessonAnswersSheet(ss))
     .filter(a => a.group_id == group_id);
 
@@ -718,7 +718,7 @@ function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_t
   let score = '', scoreFeedback = '';
   if (answer_text && answer_text.trim().length > 0) {
     try {
-      const blocks = sheetToObjects(ensureLessonBlocksSheet(ss));
+      const blocks = getLessonBlocksCached_(ss);
       const block  = blocks.find(b => b.block_id === block_id);
       const prompt = block ? block.question_prompt : '';
       const systemPrompt = `אתה מעריך תשובה של תלמיד תיכון לשאלה אישית בפרויקט תיירות דיגיטלית.
@@ -773,7 +773,7 @@ function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_t
  * שיש עדכון שממתין לבדיקה. תשובת למידה לא יוצרת ממצא בכלל.
  */
 function upsertFinding_(ss, { group_id, unit_id, block_id, answer_text, now }) {
-  const blocks = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const blocks = getLessonBlocksCached_(ss);
   const block  = blocks.find(b => b.block_id === block_id);
   if (!block || block.answer_scope !== 'project') return;
 
@@ -811,7 +811,7 @@ function getFindingsForTeacher({ verifiedEmail }) {
 
   const myGroups   = sheetToObjects(ss.getSheetByName('groups')).filter(g => g.teacher_email == verifiedEmail);
   const myGroupIds = new Set(myGroups.map(g => String(g.group_id)));
-  const allBlocks  = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const allBlocks  = getLessonBlocksCached_(ss);
   const allUnits   = sheetToObjects(ss.getSheetByName('units'));
 
   const findings = sheetToObjects(ensureFindingsSheet(ss))
@@ -884,7 +884,7 @@ function updateFindingStatus({ verifiedEmail, finding_id, status, teacher_note }
  */
 function notifyGroupAboutFinding_(ss, group, status, teacher_note, finding) {
   if (!group) return;
-  const block = sheetToObjects(ensureLessonBlocksSheet(ss)).find(b => b.block_id === finding.block_id);
+  const block = getLessonBlocksCached_(ss).find(b => b.block_id === finding.block_id);
   const blockTitle = (block && block.title) ? block.title : 'התוצר שלכם';
 
   const title = status === 'approved' ? '🎉 המורה אישר תוצר' : '✏️ המורה מבקש תיקון';
@@ -905,7 +905,7 @@ function notifyGroupAboutFinding_(ss, group, status, teacher_note, finding) {
  * כתב ידנית באותו סעיף. נקראת רק כשמורה מאשר ממצא (status='approved').
  */
 function exportFindingToProject_(ss, finding) {
-  const block = sheetToObjects(ensureLessonBlocksSheet(ss)).find(b => b.block_id === finding.block_id);
+  const block = getLessonBlocksCached_(ss).find(b => b.block_id === finding.block_id);
   if (!block || !block.target_field || !finding.project_section) return;
 
   const projectsSheet = ss.getSheetByName('projects');
@@ -957,6 +957,31 @@ function ensureLessonBlocksSheet(ss) {
     'media_type', 'media_url', 'game_type', 'game_data', 'question_prompt', 'target_field'
   ]);
   return ensureLessonBlockScopeColumns(sheet);
+}
+
+/**
+ * גרסה עם מטמון (cache) של תוכן lesson_blocks — 170+ שורות עם game_data
+ * מפורט לכל בלוק, נקראות מחדש בכל טעינת עמוד (getTeacherDashboard,
+ * getGroupLessons וכו') על תוכן שכמעט אף פעם לא משתנה. מטמון ל-5 דקות
+ * מספיק כדי לחסוך את רוב הקריאות בלי סיכון אמיתי — כל עריכה אמיתית
+ * (addLessonBlock/updateLessonBlock/deleteLessonBlock) מבטלת את המטמון
+ * מיידית, כך שגם אם מפספסים מקום כלשהו, אי-העדכניות מתקנת את עצמה תוך
+ * דקות ספורות לכל היותר.
+ */
+function getLessonBlocksCached_(ss) {
+  const cache = CacheService.getScriptCache();
+  const key   = 'lesson_blocks_' + ss.getId();
+  const cached = cache.get(key);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) { /* ממשיכים לקרוא מהגיליון */ }
+  }
+  const rows = sheetToObjects(ensureLessonBlocksSheet(ss));
+  try { cache.put(key, JSON.stringify(rows), 300); } catch (e) { /* מעל למגבלת גודל של Cache — פשוט לא נשמר הפעם */ }
+  return rows;
+}
+
+function invalidateLessonBlocksCache_(ss) {
+  CacheService.getScriptCache().remove('lesson_blocks_' + ss.getId());
 }
 
 /**
@@ -1153,6 +1178,7 @@ function addLessonBlock({ verifiedEmail, unit_id, block_order, block_type, title
       project_section: project_section || '',
       is_exportable: is_exportable === undefined ? (answer_scope === 'project') : !!is_exportable
     });
+    invalidateLessonBlocksCache_(ss);
     return { block_id, created: true };
   });
 }
@@ -1177,6 +1203,7 @@ function updateLessonBlock({ verifiedEmail, block_id, block_order, title, body, 
       if (colIdx > 0) sheet.getRange(rowNum, colIdx).setValue(fields[key]);
     });
 
+    invalidateLessonBlocksCache_(ss);
     return { block_id, updated: true };
   });
 }
@@ -1190,6 +1217,7 @@ function deleteLessonBlock({ verifiedEmail, block_id }) {
     const idx    = blocks.findIndex(b => b.block_id === block_id);
     if (idx === -1) throw new Error('בלוק לא נמצא');
     sheet.deleteRow(idx + 2);
+    invalidateLessonBlocksCache_(ss);
     return { deleted: true };
   });
 }
@@ -1206,7 +1234,7 @@ function getGroupLessonAnswers({ verifiedEmail, group_id }) {
 
   const ss      = SpreadsheetApp.openById(SHEETS.TOURISM);
   const answers = sheetToObjects(ensureLessonAnswersSheet(ss)).filter(a => a.group_id == group_id);
-  const blocks  = sheetToObjects(ensureLessonBlocksSheet(ss));
+  const blocks  = getLessonBlocksCached_(ss);
   const units   = sheetToObjects(ss.getSheetByName('units'));
 
   const enriched = answers
