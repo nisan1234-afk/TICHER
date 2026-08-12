@@ -200,6 +200,32 @@ function getMyProfile({ verifiedEmail, verifiedName }) {
     };
   }
 
+  // הטאב 'תלמידים' לא באמת בשימוש — הגישה האמיתית של תלמיד נקבעת אך ורק
+  // דרך היותו רשום ב-members של קבוצה (בטאב groups של כל מקצוע), בדיוק כמו
+  // שכל שאר הקוד (saveLessonAnswer/getGroupLessons/getGroupData וכו') כבר
+  // בודק. בלי הבדיקה הזו כאן, תלמיד שהמורה הוסיף לקבוצה בפועל היה מקבל
+  // "משתמש לא נמצא" בכניסה הראשונה שלו — באג אמיתי שתפס את כל התלמידים.
+  // .trim() לבד לא מספיק — מיילים שהודבקו מטקסט מעורב עברית/אנגלית (וורד,
+  // PDF, שיטס עצמו) לפעמים גוררים תו כיווניות בלתי-נראה (RTL/LRM וכו') שנדבק
+  // לסוף המחרוזת ושובר השוואה מדויקת. מסירים כל תווי הכיווניות/רוחב-אפס.
+  const INVISIBLE_CODES = [0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0xFEFF];
+  const INVISIBLE_RE = new RegExp('[' + INVISIBLE_CODES.map(function (c) { return String.fromCharCode(c); }).join('') + ']', 'g');
+  const stripInvisible = s => String(s).replace(INVISIBLE_RE, '').trim().toLowerCase();
+  const emailToCheck = stripInvisible(verifiedEmail);
+  const isGroupMember = ['TOURISM'].some(key => {
+    const groups = sheetToObjects(SpreadsheetApp.openById(SHEETS[key]).getSheetByName('groups'));
+    return groups.some(g => String(g.members || '').split(',').map(stripInvisible).includes(emailToCheck));
+  });
+  if (isGroupMember) {
+    return {
+      name:  verifiedName,
+      email: verifiedEmail,
+      phone: '',
+      roles: ['student'],
+      role:  'student'
+    };
+  }
+
   throw new Error('משתמש לא נמצא במערכת. פנה למורה להרשמה.');
 }
 
