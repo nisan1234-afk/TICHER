@@ -517,7 +517,7 @@ function sendBackupEmail({ verifiedEmail, group_id, to_email }) {
   if (!group) throw new Error('קבוצה לא נמצאה');
 
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) {
     throw new Error('אין הרשאה לגבות קבוצה זו');
   }
   if (!to_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to_email)) {
@@ -571,7 +571,7 @@ function restoreBackup({ verifiedEmail, group_id, backup_json }) {
   if (!group) throw new Error('קבוצה לא נמצאה');
 
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) {
     throw new Error('אין הרשאה לשחזר לקבוצה זו');
   }
 
@@ -632,7 +632,7 @@ function getGroupLessons({ verifiedEmail, group_id }) {
   if (!group) throw new Error('קבוצה לא נמצאה');
 
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) {
     throw new Error('אין הרשאה לצפות ביחידות של קבוצה זו');
   }
 
@@ -711,7 +711,7 @@ function saveLessonAnswer({ verifiedEmail, group_id, unit_id, block_id, answer_t
   if (!group) throw new Error('קבוצה לא נמצאה');
 
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) {
     throw new Error('אין הרשאה לשמור תשובה עבור קבוצה זו');
   }
 
@@ -1281,7 +1281,7 @@ function saveSection({ verifiedEmail, group_id, section_num, content, device_id 
   if (!group) throw new Error('קבוצה לא נמצאה');
 
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) {
     throw new Error('אין הרשאה לערוך קבוצה זו');
   }
 
@@ -1409,7 +1409,7 @@ function trackLessonView({ verifiedEmail, group_id, unit_id }) {
     if (idx === -1) return { tracked: false };
 
     const members = String(groups[idx].members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-    if (!members.includes(String(verifiedEmail).toLowerCase())) return { tracked: false };
+    if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) return { tracked: false };
 
     const rowNum = idx + 2;
     const colIdx = headers.indexOf('last_unit_id') + 1;
@@ -1722,8 +1722,8 @@ function addMember({ verifiedEmail, group_id, member_email }) {
     if (idx === -1) throw new Error('קבוצה לא נמצאה');
 
     const members = String(groups[idx].members || '').split(',').map(m => m.trim()).filter(Boolean);
-    const emailLower = String(member_email).trim().toLowerCase();
-    if (members.some(m => m.toLowerCase() === emailLower)) {
+    const emailLower = stripInvisible_(member_email);
+    if (members.some(m => stripInvisible_(m) === emailLower)) {
       throw new Error('התלמיד כבר בקבוצה');
     }
     members.push(String(member_email).trim());
@@ -1746,10 +1746,10 @@ function removeMember({ verifiedEmail, group_id, member_email }) {
     const idx    = groups.findIndex(g => g.group_id == group_id && g.teacher_email == verifiedEmail);
     if (idx === -1) throw new Error('קבוצה לא נמצאה');
 
-    const emailLower = String(member_email).trim().toLowerCase();
+    const emailLower = stripInvisible_(member_email);
     const members = String(groups[idx].members || '')
       .split(',').map(m => m.trim()).filter(Boolean)
-      .filter(m => m.toLowerCase() !== emailLower);
+      .filter(m => stripInvisible_(m) !== emailLower);
 
     const headers = getHeaders(sheet);
     const rowNum  = idx + 2;
@@ -1773,7 +1773,7 @@ function uploadFile({ verifiedEmail, group_id, file_name, mime_type, base64_data
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
   const roles   = getRoles(SpreadsheetApp.openById(SHEETS.KITA_PLUS), verifiedEmail);
   const isTeacher = roles.some(r => ['teacher','admin','school_admin'].includes(r));
-  if (!members.includes(String(verifiedEmail).toLowerCase()) && !isTeacher) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail)) && !isTeacher) {
     throw new Error('אין הרשאה להעלות קובץ לקבוצה זו');
   }
 
@@ -1807,7 +1807,7 @@ function getGroupFiles({ verifiedEmail, group_id }) {
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
   const roles   = getRoles(SpreadsheetApp.openById(SHEETS.KITA_PLUS), verifiedEmail);
   const isTeacher = roles.some(r => ['teacher','admin','school_admin'].includes(r));
-  if (!members.includes(String(verifiedEmail).toLowerCase()) && !isTeacher) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail)) && !isTeacher) {
     throw new Error('אין הרשאה לצפות בקבצי קבוצה זו');
   }
 
@@ -1888,7 +1888,7 @@ function proposeSite({ verifiedEmail, group_id, site_name, site_url }) {
   if (idx === -1) throw new Error('קבוצה לא נמצאה');
 
   const members = String(groups[idx].members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
-  if (!members.includes(String(verifiedEmail).toLowerCase())) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail))) {
     throw new Error('אין הרשאה לבחור אתר לקבוצה זו');
   }
 
@@ -1929,7 +1929,7 @@ function chatWithBot({ verifiedEmail, group_id, section_num, message }) {
   const members = String(group.members || '').split(',').map(m => m.trim().toLowerCase()).filter(Boolean);
   const roles   = getRoles(SpreadsheetApp.openById(SHEETS.KITA_PLUS), verifiedEmail);
   const isTeacher = roles.some(r => ['teacher','admin','school_admin'].includes(r));
-  if (!members.includes(String(verifiedEmail).toLowerCase()) && !isTeacher) {
+  if (!members.map(stripInvisible_).includes(stripInvisible_(verifiedEmail)) && !isTeacher) {
     throw new Error('אין הרשאה לגשת לצ׳אטבוט של קבוצה זו');
   }
 
