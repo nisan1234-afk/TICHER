@@ -58,7 +58,7 @@ function doPost(e) {
     const action = body.action;
 
     const protectedActions = [
-      'getMyProfile', 'getTeacherDashboard', 'getGroupData', 'getMyStudentGroup',
+      'getMyProfile', 'getTeacherDashboard', 'getGroupData', 'getMyStudentGroup', 'getMySubjects',
       'saveSection', 'toggleUnit', 'addUnit', 'updateLesson', 'getGroupLessons', 'getAdminData',
       'updateTeacherStatus', 'updatePassword', 'addRole',
       'addGroup', 'addMember', 'removeMember', 'uploadFile', 'getGroupFiles', 'bulkImportGroups',
@@ -88,6 +88,7 @@ function doPost(e) {
       getTeacherDashboard: () => getTeacherDashboard(body),
       getGroupData:        () => getGroupData(body),
       getMyStudentGroup:   () => getMyStudentGroup(body),
+      getMySubjects:       () => getMySubjects(body),
       saveSection:         () => saveSection(body),
       toggleUnit:          () => toggleUnit(body),
       addUnit:             () => addUnit(body),
@@ -406,6 +407,58 @@ function getMyStudentGroup({ verifiedEmail }) {
     : group.percent;
 
   return { group, classAvg };
+}
+
+// ========== ריבוי מקצועות (subjects) ==========
+
+/**
+ * מחזירה למשתמש המחובר את רשימת המקצועות הפעילים ששייכים לו בפועל, לפי
+ * טאב 'subjects' בגיליון KITA_PLUS. תוסף טהור: לא נוגעת בשום פונקציה קיימת.
+ * אם הטאב 'subjects' עדיין לא קיים בגיליון (טרם הוגדר ידנית) — מחזירה
+ * רשימה ריקה בלי שגיאה, כדי שהפרונט יֵדע ליפול חזרה להתנהגות הישנה
+ * (מקצוע יחיד, תיירות דיגיטלית) בלי לשבור כלום.
+ */
+function getMySubjects({ verifiedEmail }) {
+  const ssKP = SpreadsheetApp.openById(SHEETS.KITA_PLUS);
+  const subjectsSheet = ssKP.getSheetByName('subjects');
+  if (!subjectsSheet) return { subjects: [] };
+
+  const roles = getRoles(ssKP, verifiedEmail);
+  const isStaff = roles.some(r => ['teacher', 'homeroom', 'admin', 'school_admin'].includes(r));
+
+  const activeSubjects = sheetToObjects(subjectsSheet).filter(s => s.status === 'active');
+
+  const subjects = activeSubjects
+    .map(s => {
+      const checker = SUBJECT_ENROLLMENT_CHECKERS[s.subject_id];
+      const enrolled = isStaff || (checker ? checker(verifiedEmail) : false);
+      return {
+        subject_id:  s.subject_id,
+        name:        s.name,
+        icon:        s.icon || '📘',
+        teacher_url: s.teacher_url,
+        student_url: s.student_url,
+        enrolled
+      };
+    })
+    .filter(s => s.enrolled);
+
+  return { subjects };
+}
+
+/**
+ * מפתח משיוך מקצוע לבודק-שיוך משלו — כל מקצוע חדש מוסיף שורה אחת כאן,
+ * בלי לגעת במקצועות קיימים. tourism_bagrut יתווסף כשה-Sheet שלו ייבנה.
+ */
+const SUBJECT_ENROLLMENT_CHECKERS = {
+  tourism: checkTourismEnrollment_
+};
+
+function checkTourismEnrollment_(email) {
+  const ss = SpreadsheetApp.openById(SHEETS.TOURISM);
+  const groups = sheetToObjects(ss.getSheetByName('groups'));
+  const emailNorm = stripInvisible_(email);
+  return groups.some(g => String(g.members || '').split(',').map(stripInvisible_).includes(emailNorm));
 }
 
 function getGroupData({ verifiedEmail, group_id }) {
